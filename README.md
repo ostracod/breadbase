@@ -12,6 +12,7 @@ This project has the following system-wide dependencies:
 
 * Node.js version ^16.4
 * TypeScript version ^4.5
+* pnpm version ^6.24
 
 To use this repository as a dependency, add the following line to `dependencies` in your `package.json` file, replacing `(version)` with the desired version number:
 

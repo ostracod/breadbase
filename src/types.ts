@@ -62,4 +62,8 @@ export interface ValueIndex extends Index {
     path: Selector[];
 }
 
+export interface Storage {
+    
+}
+
 
