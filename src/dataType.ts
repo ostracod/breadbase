@@ -25,6 +25,36 @@ export class IntType implements DataType<number> {
     }
 }
 
+export class ArrayType<T> implements DataType<T[]> {
+    elementType: DataType<T>;
+    length: number;
+    
+    constructor(elementType: DataType<T>, length: number) {
+        this.elementType = elementType;
+        this.length = length;
+    }
+    
+    getSize(): number {
+        return this.elementType.getSize() * this.length;
+    }
+    
+    read(data: Buffer, offset: number): T[] {
+        const elementSize = this.elementType.getSize();
+        const output: T[] = [];
+        for (let index = 0; index < this.length; index++) {
+            output.push(this.elementType.read(data, offset + index * elementSize));
+        }
+        return output;
+    }
+    
+    write(data: Buffer, offset: number, value: T[]): void {
+        const elementSize = this.elementType.getSize();
+        for (let index = 0; index < this.length; index++) {
+            this.elementType.write(data, offset + index * elementSize, value[index]);
+        }
+    }
+}
+
 export interface Field {
     name: string;
     type: DataType;

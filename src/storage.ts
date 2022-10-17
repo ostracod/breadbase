@@ -33,8 +33,8 @@ export class FileStorage implements Storage {
 }
 
 export class MemoryStorage implements Storage {
-    private data: Buffer;
-    private version: number;
+    data: Buffer;
+    version: number;
     
     constructor() {
         this.data = Buffer.from([]);
