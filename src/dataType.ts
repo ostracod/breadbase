@@ -1,0 +1,71 @@
+
+export interface DataType<T = any> {
+    getSize(): number;
+    read(data: Buffer, offset: number): T;
+    write(data: Buffer, offset: number, value: T): void;
+}
+
+export class IntType implements DataType<number> {
+    size: number;
+    
+    constructor(size: number) {
+        this.size = size;
+    }
+    
+    getSize(): number {
+        return this.size;
+    }
+    
+    read(data: Buffer, offset: number): number {
+        return data.readIntLE(offset, this.size);
+    }
+    
+    write(data: Buffer, offset: number, value: number): void {
+        data.writeIntLE(value, offset, this.size);
+    }
+}
+
+export interface Field {
+    name: string;
+    type: DataType;
+}
+
+export interface ResolvedField extends Field {
+    offset: number;
+}
+
+export class StructType<T> implements DataType<T> {
+    fieldMap: Map<string, ResolvedField>;
+    size: number;
+    
+    constructor(fields: Field[]) {
+        this.fieldMap = new Map();
+        let offset = 0;
+        for (const field of fields) {
+            const resolvedField: ResolvedField = { ...field, offset };
+            this.fieldMap.set(resolvedField.name, resolvedField);
+            offset += resolvedField.type.getSize();
+        }
+        this.size = offset;
+    }
+    
+    getSize(): number {
+        return this.size;
+    }
+    
+    read(data: Buffer, offset: number): T {
+        const output: any = {};
+        this.fieldMap.forEach((field) => {
+            output[field.name] = field.type.read(data, offset + field.offset);
+        });
+        return output as T;
+    }
+    
+    write(data: Buffer, offset: number, value: T): void {
+        this.fieldMap.forEach((field) => {
+            field.type.write(data, offset + field.offset, (value as any)[field.name]);
+        });
+    }
+}
+
+
