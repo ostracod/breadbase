@@ -1,11 +1,29 @@
 
-import { StoragePointer } from "./internalTypes.js";
+import { storagePointerSize } from "./constants.js";
+import { StoragePointer } from "./storagePointer.js";
 
 export interface DataType<T = any> {
     getSize(): number;
     read(data: Buffer, offset: number): T;
     write(data: Buffer, offset: number, value: T): void;
 }
+
+export class BoolType implements DataType<boolean> {
+    
+    getSize(): number {
+        return 1;
+    }
+    
+    read(data: Buffer, offset: number): boolean {
+        return (data.readInt8(offset) !== 0);
+    }
+    
+    write(data: Buffer, offset: number, value: boolean): void {
+        data.writeInt8(value ? 1 : 0, offset);
+    }
+}
+
+export const boolType = new BoolType();
 
 export class IntType<T extends number = number> implements DataType<T> {
     size: number;
@@ -27,10 +45,24 @@ export class IntType<T extends number = number> implements DataType<T> {
     }
 }
 
-export class StoragePointerType<T> extends IntType<StoragePointer<T>> {
+export class StoragePointerType<T> implements DataType<StoragePointer<T>> {
+    elementType: DataType<T>;
     
-    constructor() {
-        super(6);
+    constructor(elementType: DataType<T> = null) {
+        this.elementType = elementType;
+    }
+    
+    getSize(): number {
+        return storagePointerSize;
+    }
+    
+    read(data: Buffer, offset: number): StoragePointer<T> {
+        const index = data.readIntLE(offset, storagePointerSize);
+        return new StoragePointer(index, this.elementType);
+    }
+    
+    write(data: Buffer, offset: number, value: StoragePointer<T>): void {
+        data.writeIntLE(value.index, offset, storagePointerSize);
     }
 }
 

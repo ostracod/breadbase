@@ -11,7 +11,7 @@ describe("BreadBase", () => {
             const storage = new MemoryStorage();
             await breadBase.initWithStorage(storage);
             expect(breadBase.emptySpansByDegree.length).toEqual(spanDegreeAmount);
-            expect(breadBase.finalSpan).toEqual(storageHeaderType.getSize());
+            expect(breadBase.finalSpan.index).toEqual(storageHeaderType.getSize());
             expect(storage.getSize()).toEqual(
                 storageHeaderType.getSize() + spanHeaderType.getSize() + emptySpanHeaderType.getSize(),
             );

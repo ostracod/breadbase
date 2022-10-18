@@ -1,7 +1,7 @@
 
-import { StoragePointer } from "./internalTypes.js";
 import { spanDegreeAmount } from "./constants.js";
-import { IntType, StoragePointerType, ArrayType, StructType } from "./dataType.js";
+import { boolType, IntType, StoragePointerType, ArrayType, StructType } from "./dataType.js";
+import { StoragePointer } from "./storagePointer.js";
 
 const spanPointerType = new StoragePointerType<SpanHeader>();
 
@@ -23,7 +23,7 @@ export interface SpanHeader {
     nextByNeighbor: StoragePointer<SpanHeader>;
     size: number;
     degree: number;
-    isEmpty: number;
+    isEmpty: boolean;
 }
 
 export const spanHeaderType = new StructType<SpanHeader>([
@@ -31,7 +31,7 @@ export const spanHeaderType = new StructType<SpanHeader>([
     { name: "nextByNeighbor", type: spanPointerType },
     { name: "size", type: new IntType(6) },
     { name: "degree", type: new IntType(1) },
-    { name: "isEmpty", type: new IntType(1) },
+    { name: "isEmpty", type: boolType },
 ]);
 
 export interface EmptySpanHeader {
@@ -53,5 +53,8 @@ export const allocHeaderType = new StructType<AllocHeader>([
     { name: "type", type: new IntType(1) },
     { name: "size", type: new IntType(4) },
 ]);
+
+// TODO: Make this less awkward.
+spanPointerType.elementType = spanHeaderType;
 
 

@@ -11,14 +11,18 @@ describe("MemoryStorage", () => {
         });
     });
     
-    describe("write", () => {
+    describe("writeBuffer", () => {
         it("changes values in storage", async () => {
             const storage = new MemoryStorage();
             await storage.setSize(20);
-            await storage.write(10, Buffer.from([11, 22]));
-            await storage.write(15, Buffer.from([33, 44]));
-            expect((await storage.read(10, 2)).compare(Buffer.from([11, 22]))).toEqual(0);
-            expect((await storage.read(15, 2)).compare(Buffer.from([33, 44]))).toEqual(0);
+            await storage.writeBuffer(10, Buffer.from([11, 22]));
+            await storage.writeBuffer(15, Buffer.from([33, 44]));
+            expect(
+                (await storage.readBuffer(10, 2)).compare(Buffer.from([11, 22])),
+            ).toEqual(0);
+            expect(
+                (await storage.readBuffer(15, 2)).compare(Buffer.from([33, 44])),
+            ).toEqual(0);
         });
     });
     

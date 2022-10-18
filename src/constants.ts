@@ -1,5 +1,5 @@
 
 export const spanDegreeAmount = 90;
-export const nullPointer = 0;
+export const storagePointerSize = 6;
 
 
