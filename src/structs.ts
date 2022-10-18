@@ -1,39 +1,47 @@
 
+import { StoragePointer } from "./internalTypes.js";
 import { spanDegreeAmount } from "./constants.js";
-import { IntType, ArrayType, StructType } from "./dataType.js";
+import { IntType, StoragePointerType, ArrayType, StructType } from "./dataType.js";
+
+const spanPointerType = new StoragePointerType<SpanHeader>();
 
 export interface StorageHeader {
-    emptySpans: number[];
+    emptySpansByDegree: StoragePointer<SpanHeader>[];
+    finalSpan: StoragePointer<SpanHeader>;
 }
 
 export const storageHeaderType = new StructType<StorageHeader>([
-    { name: "emptySpans", type: new ArrayType(new IntType(6), spanDegreeAmount) },
+    {
+        name: "emptySpansByDegree",
+        type: new ArrayType(spanPointerType, spanDegreeAmount),
+    },
+    { name: "finalSpan", type: spanPointerType },
 ]);
 
 export interface SpanHeader {
-    previousByNeighbor: number;
-    nextByNeighbor: number;
+    previousByNeighbor: StoragePointer<SpanHeader>;
+    nextByNeighbor: StoragePointer<SpanHeader>;
     size: number;
     degree: number;
     isEmpty: number;
 }
 
 export const spanHeaderType = new StructType<SpanHeader>([
-    { name: "previousByNeighbor", type: new IntType(6) },
-    { name: "nextByNeighbor", type: new IntType(6) },
+    { name: "previousByNeighbor", type: spanPointerType },
+    { name: "nextByNeighbor", type: spanPointerType },
     { name: "size", type: new IntType(6) },
     { name: "degree", type: new IntType(1) },
     { name: "isEmpty", type: new IntType(1) },
 ]);
 
 export interface EmptySpanHeader {
-    previousByDegree: number;
-    nextByDegree: number;
+    previousByDegree: StoragePointer<SpanHeader>;
+    nextByDegree: StoragePointer<SpanHeader>;
 }
 
 export const emptySpanHeaderType = new StructType<EmptySpanHeader>([
-    { name: "previousByDegree", type: new IntType(6) },
-    { name: "nextByDegree", type: new IntType(6) },
+    { name: "previousByDegree", type: spanPointerType },
+    { name: "nextByDegree", type: spanPointerType },
 ]);
 
 export interface AllocHeader {

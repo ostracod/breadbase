@@ -28,11 +28,18 @@ export const findFirstBit = (value: number): number => {
 };
 
 export const convertDegreeToSize = (degree: number): number => {
+    // A degree equal to -1 indicates the final span in storage.
+    if (degree < 0) {
+        return -1;
+    }
     const exponent = degree >> 2;
     return (64 << exponent) + (16 << exponent) * (degree & 3) - 64;
 };
 
 export const convertSizeToDegree = (size: number): number => {
+    if (size < 0) {
+        return -1;
+    }
     const adjustedSize = size + 64;
     const exponent = findFirstBit(adjustedSize) - 6;
     return (exponent << 2) + ((adjustedSize - (64 << exponent)) >> (exponent + 4));

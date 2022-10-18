@@ -1,8 +1,9 @@
 
-import { Selector, Value, Index, Storage } from "./types.js";
-import { spanDegreeAmount } from "./constants.js";
+import { Selector, Value, Index } from "./types.js";
+import { StoragePointer, Storage } from "./internalTypes.js";
+import { spanDegreeAmount, nullPointer } from "./constants.js";
 import { DataType } from "./dataType.js";
-import { StorageHeader, storageHeaderType } from "./structs.js";
+import { storageHeaderType, SpanHeader, spanHeaderType, emptySpanHeaderType } from "./structs.js";
 import { FileStorage } from "./storage.js";
 
 // Methods and member variables which are not marked as public are meant
@@ -10,7 +11,8 @@ import { FileStorage } from "./storage.js";
 
 export class BreadBase {
     storage: Storage;
-    emptySpans: number[];
+    emptySpansByDegree: StoragePointer<SpanHeader>[];
+    finalSpan: StoragePointer<SpanHeader>;
     
     public async init(directoryPath: string): Promise<void> {
         const storage = new FileStorage();
@@ -50,29 +52,46 @@ export class BreadBase {
         throw new Error("Not yet implemented.");
     }
     
-    async readByType<T>(offset: number, type: DataType<T>): Promise<T> {
-        const data = await this.storage.read(type.getSize(), offset);
+    async readByType<T>(pointer: StoragePointer<T>, type: DataType<T>): Promise<T> {
+        const data = await this.storage.read(type.getSize(), pointer);
         return type.read(data, 0);
     }
     
-    async writeByType<T>(offset: number, type: DataType<T>, value: T): Promise<void> {
+    async writeByType<T>(
+        pointer: StoragePointer<T>,
+        type: DataType<T>,
+        value: T,
+    ): Promise<void> {
         const data = Buffer.alloc(type.getSize());
         type.write(data, 0, value);
-        await this.storage.write(offset, data);
+        await this.storage.write(pointer, data);
     }
     
     async createEmptyDb(): Promise<void> {
-        this.emptySpans = [];
-        while (this.emptySpans.length < spanDegreeAmount) {
-            this.emptySpans.push(0);
+        const headerSize1 = storageHeaderType.getSize();
+        const headerSize2 = spanHeaderType.getSize();
+        const headerSize3 = emptySpanHeaderType.getSize();
+        this.emptySpansByDegree = [];
+        while (this.emptySpansByDegree.length < spanDegreeAmount) {
+            this.emptySpansByDegree.push(0);
         }
-        // TODO: Create the first empty span.
-        
-        const storageHeader: StorageHeader = {
-            emptySpans: this.emptySpans,
-        }
-        await this.storage.setSize(storageHeaderType.getSize());
-        await this.writeByType(0, storageHeaderType, storageHeader);
+        this.finalSpan = headerSize1;
+        await this.storage.setSize(headerSize1 + headerSize2 + headerSize3);
+        await this.writeByType(0, storageHeaderType, {
+            emptySpansByDegree: this.emptySpansByDegree,
+            finalSpan: this.finalSpan,
+        });
+        await this.writeByType(headerSize1, spanHeaderType, {
+            previousByNeighbor: nullPointer,
+            nextByNeighbor: nullPointer,
+            size: -1,
+            degree: -1,
+            isEmpty: 1,
+        });
+        await this.writeByType(headerSize1 + headerSize2, emptySpanHeaderType, {
+            previousByDegree: nullPointer,
+            nextByDegree: nullPointer,
+        });
         await this.storage.markVersion();
     }
     
@@ -82,7 +101,8 @@ export class BreadBase {
             await this.createEmptyDb();
         } else {
             const storageHeader = await this.readByType(0, storageHeaderType);
-            this.emptySpans = storageHeader.emptySpans;
+            this.emptySpansByDegree = storageHeader.emptySpansByDegree;
+            this.finalSpan = storageHeader.finalSpan;
         }
     }
 }

@@ -1,11 +1,13 @@
 
+import { StoragePointer } from "./internalTypes.js";
+
 export interface DataType<T = any> {
     getSize(): number;
     read(data: Buffer, offset: number): T;
     write(data: Buffer, offset: number, value: T): void;
 }
 
-export class IntType implements DataType<number> {
+export class IntType<T extends number = number> implements DataType<T> {
     size: number;
     
     constructor(size: number) {
@@ -16,12 +18,19 @@ export class IntType implements DataType<number> {
         return this.size;
     }
     
-    read(data: Buffer, offset: number): number {
-        return data.readIntLE(offset, this.size);
+    read(data: Buffer, offset: number): T {
+        return data.readIntLE(offset, this.size) as T;
     }
     
-    write(data: Buffer, offset: number, value: number): void {
+    write(data: Buffer, offset: number, value: T): void {
         data.writeIntLE(value, offset, this.size);
+    }
+}
+
+export class StoragePointerType<T> extends IntType<StoragePointer<T>> {
+    
+    constructor() {
+        super(6);
     }
 }
 

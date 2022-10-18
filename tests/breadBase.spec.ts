@@ -1,6 +1,6 @@
 
 import { spanDegreeAmount } from "../src/constants.js";
-import { storageHeaderType } from "../src/structs.js";
+import { storageHeaderType, spanHeaderType, emptySpanHeaderType } from "../src/structs.js";
 import { MemoryStorage } from "../src/storage.js"
 import { BreadBase } from "../src/breadBase.js"
 
@@ -10,8 +10,11 @@ describe("BreadBase", () => {
             const breadBase = new BreadBase();
             const storage = new MemoryStorage();
             await breadBase.initWithStorage(storage);
-            expect(breadBase.emptySpans.length).toEqual(spanDegreeAmount);
-            expect(storage.getSize()).toEqual(storageHeaderType.getSize());
+            expect(breadBase.emptySpansByDegree.length).toEqual(spanDegreeAmount);
+            expect(breadBase.finalSpan).toEqual(storageHeaderType.getSize());
+            expect(storage.getSize()).toEqual(
+                storageHeaderType.getSize() + spanHeaderType.getSize() + emptySpanHeaderType.getSize(),
+            );
         });
     });
 });

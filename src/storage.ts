@@ -1,5 +1,5 @@
 
-import { Storage } from "./types.js";
+import { Storage } from "./internalTypes.js";
 
 export class FileStorage implements Storage {
     
