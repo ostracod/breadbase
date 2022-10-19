@@ -1,0 +1,43 @@
+[
+    { "name": "StorageHeader", "type": {
+        "class": "StructType",
+        "fields": [
+            { "name": "emptySpansByDegree", "type": {
+                "class": "ArrayType",
+                "elementType": {
+                    "class": "StoragePointerType",
+                    "elementType": "SpanHeader"
+                },
+                "length": "spanDegreeAmount"
+            } },
+            { "name": "finalSpan", "type": {
+                "class": "StoragePointerType",
+                "elementType": "SpanHeader"
+            } }
+        ]
+    } },
+    { "name": "SpanHeader", "type": {
+        "class": "StructType",
+        "fields": [
+            { "name": "previousByNeighbor", "type": {
+                "class": "StoragePointerType",
+                "elementType": "SpanHeader"
+            } },
+            { "name": "nextByNeighbor", "type": {
+                "class": "StoragePointerType",
+                "elementType": "SpanHeader"
+            } },
+            { "name": "size", "type": {
+                "class": "IntType",
+                "size": 6
+            } },
+            { "name": "degree", "type": {
+                "class": "IntType",
+                "size": 1
+            } },
+            { "name": "isEmpty", "type": {
+                "class": "BoolType"
+            } }
+        ]
+    } }
+]
