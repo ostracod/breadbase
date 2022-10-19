@@ -1,6 +1,6 @@
 
 import { spanDegreeAmount } from "../src/constants.js";
-import { storageHeaderType, spanHeaderType, emptySpanHeaderType } from "../src/structs.js";
+import { storageHeaderType, spanHeaderType, emptySpanHeaderType } from "../src/builtTypes.js";
 import { MemoryStorage } from "../src/storage.js"
 import { BreadBase } from "../src/breadBase.js"
 

@@ -5,11 +5,15 @@ import { fileURLToPath } from "url";
 
 const directoryPath = pathUtils.dirname(fileURLToPath(import.meta.url));
 const typesPath = pathUtils.join(directoryPath, "types.json");
-const namedTypes = JSON.parse(fs.readFileSync(typesPath, "utf8"));
+const namedTypesData = JSON.parse(fs.readFileSync(typesPath, "utf8"));
 
-const getTypeInstanceName = (typeName) => (
-    typeName.charAt(0).toLowerCase() + typeName.substring(1, typeName.length) + "Type"
-);
+const pointerTypeNames = new Set();
+
+const uncapitalize = (text) => text.charAt(0).toLowerCase() + text.substring(1, text.length);
+
+const getTypeInstanceName = (typeName) => uncapitalize(typeName) + "Type";
+
+const getPointerInstanceName = (typeName) => uncapitalize(typeName);
 
 class DataType {
     // Concrete subclasses of DataType must implement these methods:
@@ -21,6 +25,10 @@ class DataType {
     
     getDeclarationCode(name, instanceName) {
         return `export type ${name} = ${this.getNestedCode()}\n\nexport const ${instanceName} = ${this.getInstanceCode()}\n`;
+    }
+    
+    getPointerInstanceCode() {
+        return `new StoragePointerType(${this.getInstanceCode()})`;
     }
 }
 
@@ -38,6 +46,11 @@ class ReferenceType extends DataType {
     
     getInstanceCode() {
         return this.instanceName;
+    }
+    
+    getPointerInstanceCode() {
+        pointerTypeNames.add(this.name);
+        return "pointerTypes." + getPointerInstanceName(this.name);
     }
 }
 
@@ -97,7 +110,23 @@ class StoragePointerType extends DataType {
     }
     
     getInstanceCode() {
-        return "...";
+        return this.elementType.getPointerInstanceCode();
+    }
+}
+
+class Field {
+    
+    constructor(name, type) {
+        this.name = name;
+        this.type = type;
+    }
+    
+    getNestedCode() {
+        return `${this.name}: ${this.type.getNestedCode()}`;
+    }
+    
+    getInstanceCode() {
+        return `{ name: "${this.name}", type: ${this.type.getInstanceCode()} }`;
     }
 }
 
@@ -105,32 +134,33 @@ class StructType extends DataType {
     
     constructor(data) {
         super(data);
-        this.fields = data.fields.map((data) => ({
-            name: data.name,
-            type: convertDataToType(data.type),
-        }));
+        this.fields = data.fields.map((data) => (
+            new Field(data.name, convertDataToType(data.type))
+        ));
     }
     
     getDeclarationCode(name, instanceName) {
         const resultText = [];
         resultText.push(`export interface ${name} {`);
         for (const field of this.fields) {
-            resultText.push(`    ${field.name}: ${field.type.getNestedCode()};`);
+            resultText.push(`    ${field.getNestedCode()};`);
         }
         resultText.push(`}\n\nexport const ${instanceName} = new StructType<${name}>([`);
         for (const field of this.fields) {
-            resultText.push(`    { name: "${field.name}", type: ${field.type.getInstanceCode()} },`);
+            resultText.push(`    ${field.getInstanceCode()},`);
         }
         resultText.push(`]);\n`);
         return resultText.join("\n");
     }
     
     getNestedCode() {
-        return "...";
+        const fieldsCode = this.fields.map((field) => field.getNestedCode());
+        return `{ ${fieldsCode.join(", ")} }`;
     }
     
     getInstanceCode() {
-        return "...";
+        const fieldsCode = this.fields.map((field) => field.getInstanceCode());
+        return `new StructType([${fieldsCode.join(", ")}])`;
     }
 }
 
@@ -152,13 +182,26 @@ const convertDataToType = (data) => {
 
 const resultText = ["\nimport { spanDegreeAmount } from \"./constants.js\";\nimport { boolType, IntType, StoragePointerType, ArrayType, StructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
 
-for (const namedType of namedTypes) {
-    const { name } = namedType;
+const typeMap = new Map();
+const declarationsText = [];
+for (const namedTypeData of namedTypesData) {
+    const { name } = namedTypeData;
     const instanceName = getTypeInstanceName(name);
-    const type = convertDataToType(namedType.type);
-    resultText.push(type.getDeclarationCode(name, instanceName));
+    const type = convertDataToType(namedTypeData.type);
+    typeMap.set(name, type);
+    declarationsText.push(type.getDeclarationCode(name, instanceName));
 }
-resultText.push("\n");
+
+resultText.push("const pointerTypes = {");
+for (const name of pointerTypeNames) {
+    resultText.push(`    ${getPointerInstanceName(name)}: new StoragePointerType<${name}>(),`);
+}
+resultText.push("};\n");
+resultText.push(declarationsText.join("\n"));
+for (const name of pointerTypeNames) {
+    resultText.push(`pointerTypes.${getPointerInstanceName(name)}.elementType = ${getTypeInstanceName(name)};`);
+}
+resultText.push("\n\n");
 
 const destinationPath = pathUtils.join(directoryPath, "src", "builtTypes.ts");
 fs.writeFileSync(destinationPath, resultText.join("\n"));

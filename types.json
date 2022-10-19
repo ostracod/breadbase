@@ -39,5 +39,31 @@
                 "class": "BoolType"
             } }
         ]
+    } },
+    { "name": "EmptySpanHeader", "type": {
+        "class": "StructType",
+        "fields": [
+            { "name": "previousByDegree", "type": {
+                "class": "StoragePointerType",
+                "elementType": "SpanHeader"
+            } },
+            { "name": "nextByDegree", "type": {
+                "class": "StoragePointerType",
+                "elementType": "SpanHeader"
+            } }
+        ]
+    } },
+    { "name": "AllocHeader", "type": {
+        "class": "StructType",
+        "fields": [
+            { "name": "type", "type": {
+                "class": "IntType",
+                "size": 1
+            } },
+            { "name": "size", "type": {
+                "class": "IntType",
+                "size": 4
+            } }
+        ]
     } }
 ]
