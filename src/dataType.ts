@@ -1,5 +1,5 @@
 
-import { DataType, Struct, Field, ResolvedField } from "./internalTypes.js";
+import { DataType, Struct, TailStruct, Field, ResolvedField } from "./internalTypes.js";
 import { storagePointerSize } from "./constants.js";
 import { StoragePointer } from "./storagePointer.js";
 
@@ -134,6 +134,19 @@ export class StructType<T extends Struct> implements DataType<T> {
     
     getField<T2 extends string & (keyof T)>(name: T2): ResolvedField<T[T2]> {
         return this.fieldMap.get(name) as ResolvedField<T[T2]>;
+    }
+}
+
+export class TailStructType<T1, T2 extends TailStruct<T1>> extends StructType<T2> {
+    elementType: DataType<T1>;
+    
+    constructor(
+        fields: Field[],
+        elementType: DataType<T1>,
+        superType?: StructType<Partial<T2>>,
+    ) {
+        super(fields, superType);
+        this.elementType = elementType;
     }
 }
 

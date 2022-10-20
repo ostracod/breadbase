@@ -136,9 +136,16 @@ class FlavorField {
     getNestedCode() {
         return "_flavor?: { name: \"Struct\" }";
     }
+}
+
+class TailField {
     
-    getInstanceCode() {
-        throw new Error("Cannot get instance of flavor field.");
+    constructor(elementType) {
+        this.elementType = elementType;
+    }
+    
+    getNestedCode() {
+        return `_tail: ${this.elementType.getNestedCode()}[]`;
     }
 }
 
@@ -166,45 +173,86 @@ class StructType extends DataType {
         });
     }
     
+    getInterfaceName() {
+        return "Struct";
+    }
+    
+    getClassName() {
+        return "StructType";
+    }
+    
+    getParamTypeCode(name) {
+        return [name];
+    }
+    
+    getConstructorArgs() {
+        if (this.superTypeName === null) {
+            return [];
+        } else {
+            return [getTypeInstanceName(this.superTypeName)];
+        }
+    }
+    
     getDeclarationCode(name, instanceName) {
         const resultText = [];
-        const superInterfaceName = (this.superTypeName === null) ? "Struct" : this.superTypeName;
-        resultText.push(`export interface ${name} extends ${superInterfaceName} {`);
+        let extensionText = this.getInterfaceName();
+        if (this.superTypeName !== null) {
+            extensionText += ", " + this.superTypeName;
+        }
+        resultText.push(`export interface ${name} extends ${extensionText} {`);
         for (const field of this.subTypeFields) {
             resultText.push(`    ${field.getNestedCode()};`);
         }
-        resultText.push(`}\n\nexport const ${instanceName} = new StructType<${name}>([`);
+        const paramTypeCode = this.getParamTypeCode(name);
+        resultText.push(`}\n\nexport const ${instanceName} = new ${this.getClassName()}<${paramTypeCode.join(", ")}>([`);
         for (const field of this.subTypeFields) {
             resultText.push(`    ${field.getInstanceCode()},`);
         }
-        if (this.superTypeName === null) {
-            resultText.push("]);\n");
-        } else {
-            const superInstanceName = getTypeInstanceName(this.superTypeName);
-            resultText.push(`], ${superInstanceName});\n`);
-        }
+        const terms = ["]", ...this.getConstructorArgs()];
+        resultText.push(`${terms.join(", ")});\n`);
         return resultText.join("\n");
     }
     
     getNestedCode() {
         const fieldsCode = this.allFields.map((field) => field.getNestedCode());
-        fieldsCode.push("_flavor?: { name: \"Struct\" }");
         return `{ ${fieldsCode.join(", ")} }`;
     }
     
     getInstanceCode() {
-        const fieldsCode = this.subTypeFields.map((field) => field.getInstanceCode());
-        const resultText = [`new StructType([${fieldsCode.join(", ")}`];
-        if (this.superTypeName !== null) {
-            const superInstanceName = getTypeInstanceName(this.superTypeName);
-            resultText.push(", " + superInstanceName);
-        }
-        resultText.push("])");
+        const fieldCodeList = this.subTypeFields.map((field) => field.getInstanceCode());
+        const resultText = [`new ${this.getClassName()}([${fieldCodeList.join(", ")}`];
+        const terms = ["]", ...this.getConstructorArgs()];
+        resultText.push(`${terms.join(", ")})`);
         return resultText.join("");
     }
 }
 
-const classTypeMap = { BoolType, IntType, ArrayType, StoragePointerType, StructType };
+class TailStructType extends StructType {
+    
+    constructor(data) {
+        super(data);
+        this.elementType = convertDataToType(data.elementType);
+        this.allFields.push(new TailField(this.elementType));
+    }
+    
+    getInterfaceName() {
+        return `TailStruct<${this.elementType.getNestedCode()}>`;
+    }
+    
+    getClassName() {
+        return "TailStructType";
+    }
+    
+    getParamTypeCode(name) {
+        return [this.elementType.getNestedCode(), name];
+    }
+    
+    getConstructorArgs() {
+        return [this.elementType.getInstanceCode(), ...super.getConstructorArgs()]
+    }
+}
+
+const classTypeMap = { BoolType, IntType, ArrayType, StoragePointerType, StructType, TailStructType };
 
 const convertDataToType = (data) => {
     let typeConstructor;
@@ -220,7 +268,7 @@ const convertDataToType = (data) => {
     return new typeConstructor(data);
 };
 
-const resultText = ["\nimport { Struct } from \"./internalTypes.js\";\nimport { spanDegreeAmount } from \"./constants.js\";\nimport { boolType, IntType, StoragePointerType, ArrayType, StructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
+const resultText = ["\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount } from \"./constants.js\";\nimport { boolType, IntType, StoragePointerType, ArrayType, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
 
 const typeMap = new Map();
 const declarationsText = [];

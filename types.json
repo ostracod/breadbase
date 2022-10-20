@@ -6,26 +6,26 @@
                 "class": "ArrayType",
                 "elementType": {
                     "class": "StoragePointerType",
-                    "elementType": "EmptySpanHeader"
+                    "elementType": "EmptySpan"
                 },
                 "length": "spanDegreeAmount"
             } },
             { "name": "finalSpan", "type": {
                 "class": "StoragePointerType",
-                "elementType": "EmptySpanHeader"
+                "elementType": "EmptySpan"
             } }
         ]
     } },
-    { "name": "SpanHeader", "type": {
+    { "name": "Span", "type": {
         "class": "StructType",
         "fields": [
             { "name": "previousByNeighbor", "type": {
                 "class": "StoragePointerType",
-                "elementType": "SpanHeader"
+                "elementType": "Span"
             } },
             { "name": "nextByNeighbor", "type": {
                 "class": "StoragePointerType",
-                "elementType": "SpanHeader"
+                "elementType": "Span"
             } },
             { "name": "spanSize", "type": {
                 "class": "IntType",
@@ -40,23 +40,23 @@
             } }
         ]
     } },
-    { "name": "EmptySpanHeader", "type": {
+    { "name": "EmptySpan", "type": {
         "class": "StructType",
-        "superType": "SpanHeader",
+        "superType": "Span",
         "fields": [
             { "name": "previousByDegree", "type": {
                 "class": "StoragePointerType",
-                "elementType": "EmptySpanHeader"
+                "elementType": "EmptySpan"
             } },
             { "name": "nextByDegree", "type": {
                 "class": "StoragePointerType",
-                "elementType": "EmptySpanHeader"
+                "elementType": "EmptySpan"
             } }
         ]
     } },
-    { "name": "AllocHeader", "type": {
+    { "name": "Alloc", "type": {
         "class": "StructType",
-        "superType": "SpanHeader",
+        "superType": "Span",
         "fields": [
             { "name": "type", "type": {
                 "class": "IntType",
@@ -67,5 +67,14 @@
                 "size": 4
             } }
         ]
+    } },
+    { "name": "AsciiStringChars", "type": {
+        "class": "TailStructType",
+        "superType": "Alloc",
+        "fields": [],
+        "elementType": {
+            "class": "IntType",
+            "size": 1
+        }
     } }
 ]

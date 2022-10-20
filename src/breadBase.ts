@@ -3,7 +3,7 @@ import { Selector, Value, Index } from "./types.js";
 import { DataType } from "./internalTypes.js";
 import { spanDegreeAmount } from "./constants.js";
 import { StoragePointer, NullPointer } from "./storagePointer.js";
-import { storageHeaderType, spanHeaderType, EmptySpanHeader, emptySpanHeaderType } from "./builtTypes.js";
+import { storageHeaderType, spanType, EmptySpan, emptySpanType } from "./builtTypes.js";
 import { Storage, FileStorage } from "./storage.js";
 
 // Methods and member variables which are not marked as public are meant
@@ -11,8 +11,8 @@ import { Storage, FileStorage } from "./storage.js";
 
 export class BreadBase {
     storage: Storage;
-    emptySpansByDegree: StoragePointer<EmptySpanHeader>[];
-    finalSpan: StoragePointer<EmptySpanHeader>;
+    emptySpansByDegree: StoragePointer<EmptySpan>[];
+    finalSpan: StoragePointer<EmptySpan>;
     
     public async init(directoryPath: string): Promise<void> {
         const storage = new FileStorage();
@@ -54,14 +54,14 @@ export class BreadBase {
     
     async createEmptyDb(): Promise<void> {
         const storageHeaderSize = storageHeaderType.getSize();
-        const nullSpanPointer = new NullPointer(spanHeaderType);
-        const nullEmptySpanPointer = new NullPointer(emptySpanHeaderType);
+        const nullSpanPointer = new NullPointer(spanType);
+        const nullEmptySpanPointer = new NullPointer(emptySpanType);
         this.emptySpansByDegree = [];
         while (this.emptySpansByDegree.length < spanDegreeAmount) {
             this.emptySpansByDegree.push(nullEmptySpanPointer);
         }
-        this.finalSpan = new StoragePointer(storageHeaderSize, emptySpanHeaderType);
-        await this.storage.setSize(storageHeaderSize + emptySpanHeaderType.getSize());
+        this.finalSpan = new StoragePointer(storageHeaderSize, emptySpanType);
+        await this.storage.setSize(storageHeaderSize + emptySpanType.getSize());
         await this.storage.write(
             new StoragePointer(0, storageHeaderType),
             {

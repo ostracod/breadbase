@@ -9,6 +9,10 @@ export interface Struct {
     _flavor?: { name: "Struct" };
 }
 
+export interface TailStruct<T> extends Struct {
+    _tail: T[];
+}
+
 export interface Field<T = any> {
     name: string;
     type: DataType<T>;
