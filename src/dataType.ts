@@ -1,12 +1,7 @@
 
+import { DataType, Struct, Field, ResolvedField } from "./internalTypes.js";
 import { storagePointerSize } from "./constants.js";
 import { StoragePointer } from "./storagePointer.js";
-
-export interface DataType<T = any> {
-    getSize(): number;
-    read(data: Buffer, offset: number): T;
-    write(data: Buffer, offset: number, value: T): void;
-}
 
 export class BoolType implements DataType<boolean> {
     
@@ -96,16 +91,7 @@ export class ArrayType<T> implements DataType<T[]> {
     }
 }
 
-export interface Field {
-    name: string;
-    type: DataType;
-}
-
-export interface ResolvedField extends Field {
-    offset: number;
-}
-
-export class StructType<T> implements DataType<T> {
+export class StructType<T extends Struct> implements DataType<T> {
     fieldMap: Map<string, ResolvedField>;
     size: number;
     
@@ -136,6 +122,10 @@ export class StructType<T> implements DataType<T> {
         this.fieldMap.forEach((field) => {
             field.type.write(data, offset + field.offset, (value as any)[field.name]);
         });
+    }
+    
+    getField<T2 extends string & (keyof T)>(name: T2): ResolvedField<T[T2]> {
+        return this.fieldMap.get(name) as ResolvedField<T[T2]>;
     }
 }
 

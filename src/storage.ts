@@ -1,5 +1,5 @@
 
-import { DataType } from "./dataType.js";
+import { DataType } from "./internalTypes.js";
 import { StoragePointer } from "./storagePointer.js";
 
 export abstract class Storage {

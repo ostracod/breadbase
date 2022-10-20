@@ -141,7 +141,7 @@ class StructType extends DataType {
     
     getDeclarationCode(name, instanceName) {
         const resultText = [];
-        resultText.push(`export interface ${name} {`);
+        resultText.push(`export interface ${name} extends Struct {`);
         for (const field of this.fields) {
             resultText.push(`    ${field.getNestedCode()};`);
         }
@@ -155,6 +155,7 @@ class StructType extends DataType {
     
     getNestedCode() {
         const fieldsCode = this.fields.map((field) => field.getNestedCode());
+        fieldsCode.push("_flavor?: { name: \"Struct\" }");
         return `{ ${fieldsCode.join(", ")} }`;
     }
     
@@ -180,7 +181,7 @@ const convertDataToType = (data) => {
     return new typeConstructor(data);
 };
 
-const resultText = ["\nimport { spanDegreeAmount } from \"./constants.js\";\nimport { boolType, IntType, StoragePointerType, ArrayType, StructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
+const resultText = ["\nimport { Struct } from \"./internalTypes.js\";\nimport { spanDegreeAmount } from \"./constants.js\";\nimport { boolType, IntType, StoragePointerType, ArrayType, StructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
 
 const typeMap = new Map();
 const declarationsText = [];

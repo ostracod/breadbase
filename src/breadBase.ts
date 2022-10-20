@@ -1,7 +1,7 @@
 
 import { Selector, Value, Index } from "./types.js";
+import { DataType } from "./internalTypes.js";
 import { spanDegreeAmount } from "./constants.js";
-import { DataType } from "./dataType.js";
 import { StoragePointer, NullPointer } from "./storagePointer.js";
 import { storageHeaderType, SpanHeader, spanHeaderType, emptySpanHeaderType } from "./builtTypes.js";
 import { Storage, FileStorage } from "./storage.js";

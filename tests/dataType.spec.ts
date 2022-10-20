@@ -1,4 +1,5 @@
 
+import { Struct } from "../src/internalTypes.js";
 import { IntType, ArrayType, StructType } from "../src/dataType.js"
 
 describe("ArrayType", () => {
@@ -28,7 +29,11 @@ describe("ArrayType", () => {
 });
 
 describe("StructType", () => {
-    const structType = new StructType([
+    interface MyStruct extends Struct {
+        x: number,
+        y: number,
+    }
+    const structType = new StructType<MyStruct>([
         { name: "x", type: new IntType(2) },
         { name: "y", type: new IntType(4) },
     ]);
