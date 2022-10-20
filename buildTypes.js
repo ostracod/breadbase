@@ -181,10 +181,6 @@ class StructType extends DataType {
         return "StructType";
     }
     
-    getParamTypeCode(name) {
-        return [name];
-    }
-    
     getConstructorArgs() {
         if (this.superTypeName === null) {
             return [];
@@ -203,8 +199,7 @@ class StructType extends DataType {
         for (const field of this.subTypeFields) {
             resultText.push(`    ${field.getNestedCode()};`);
         }
-        const paramTypeCode = this.getParamTypeCode(name);
-        resultText.push(`}\n\nexport const ${instanceName} = new ${this.getClassName()}<${paramTypeCode.join(", ")}>([`);
+        resultText.push(`}\n\nexport const ${instanceName} = new ${this.getClassName()}<${name}>([`);
         for (const field of this.subTypeFields) {
             resultText.push(`    ${field.getInstanceCode()},`);
         }
@@ -241,10 +236,6 @@ class TailStructType extends StructType {
     
     getClassName() {
         return "TailStructType";
-    }
-    
-    getParamTypeCode(name) {
-        return [this.elementType.getNestedCode(), name];
     }
     
     getConstructorArgs() {

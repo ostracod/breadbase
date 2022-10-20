@@ -1,5 +1,6 @@
 
-import { DataType } from "./internalTypes.js";
+import { DataType, TailStruct } from "./internalTypes.js";
+import { TailStructType } from "./dataType.js";
 import { StoragePointer } from "./storagePointer.js";
 
 export abstract class Storage {
@@ -12,8 +13,18 @@ export abstract class Storage {
     abstract markVersion(): Promise<void>;
     
     async read<T>(pointer: StoragePointer<T>): Promise<T> {
-        const data = await this.readBuffer(pointer.type.getSize(), pointer.index);
+        const data = await this.readBuffer(pointer.index, pointer.type.getSize());
         return pointer.type.read(data, 0);
+    }
+    
+    async readTailStruct<T extends TailStruct>(
+        pointer: StoragePointer<T>,
+        length: number,
+    ): Promise<T> {
+        const tailStructType = pointer.type as TailStructType<T>;
+        const size = tailStructType.getSizeWithTail(length);
+        const data = await this.readBuffer(pointer.index, size);
+        return tailStructType.readWithTail(data, 0, length);
     }
     
     async write<T>(pointer: StoragePointer<T>, value: T): Promise<void> {

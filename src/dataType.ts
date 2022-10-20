@@ -1,5 +1,5 @@
 
-import { DataType, Struct, TailStruct, Field, ResolvedField } from "./internalTypes.js";
+import { DataType, Struct, TailStruct, TailStructElement, Field, ResolvedField } from "./internalTypes.js";
 import { storagePointerSize } from "./constants.js";
 import { StoragePointer } from "./storagePointer.js";
 
@@ -137,16 +137,54 @@ export class StructType<T extends Struct> implements DataType<T> {
     }
 }
 
-export class TailStructType<T1, T2 extends TailStruct<T1>> extends StructType<T2> {
-    elementType: DataType<T1>;
+export class TailStructType<T extends TailStruct> extends StructType<T> {
+    elementType: DataType<TailStructElement<T>>;
     
     constructor(
         fields: Field[],
-        elementType: DataType<T1>,
-        superType?: StructType<Partial<T2>>,
+        elementType: DataType<TailStructElement<T>>,
+        superType?: StructType<Partial<T>>,
     ) {
         super(fields, superType);
         this.elementType = elementType;
+    }
+    
+    getTailOffset(offset: number): number {
+        return offset + this.getSize();
+    }
+    
+    getSizeWithTail(length: number): number {
+        return super.getSize() + this.elementType.getSize() * length;
+    }
+    
+    // Note that this method does not (and cannot) read the struct tail.
+    // Use the method `readWithTail` to include the tail.
+    read(data: Buffer, offset: number): T {
+        const output = super.read(data, offset);
+        output._tail = null;
+        return output;
+    }
+    
+    readWithTail(data: Buffer, offset: number, length: number): T {
+        const output = super.read(data, offset);
+        const tail: TailStructElement<T>[] = [];
+        const tailOffset = this.getTailOffset(offset);
+        const elementSize = this.elementType.getSize();
+        for (let index = 0; index < length; index++) {
+            tail.push(this.elementType.read(data, tailOffset + index * elementSize));
+        }
+        output._tail = tail;
+        return output;
+    }
+    
+    write(data: Buffer, offset: number, value: T): void {
+        super.write(data, offset, value);
+        const tail = value._tail;
+        const tailOffset = this.getTailOffset(offset);
+        const elementSize = this.elementType.getSize();
+        for (let index = 0; index < tail.length; index++) {
+            this.elementType.write(data, tailOffset + index * elementSize, tail[index]);
+        }
     }
 }
 

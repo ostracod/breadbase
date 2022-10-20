@@ -1,6 +1,6 @@
 
-import { Struct } from "../src/internalTypes.js";
-import { BoolType, IntType, ArrayType, StructType } from "../src/dataType.js"
+import { Struct, TailStruct } from "../src/internalTypes.js";
+import { BoolType, boolType, IntType, ArrayType, StructType, TailStructType } from "../src/dataType.js"
 
 describe("ArrayType", () => {
     const arrayType = new ArrayType(new IntType(2), 3);
@@ -19,7 +19,7 @@ describe("ArrayType", () => {
         });
     });
     
-    describe("read", () => {
+    describe("write", () => {
         it("writes the struct to a buffer", () => {
             const data = Buffer.alloc(10, 99);
             arrayType.write(data, 3, [5, 10, 15]);
@@ -52,7 +52,7 @@ describe("StructType", () => {
         });
     });
     
-    describe("read", () => {
+    describe("write", () => {
         it("writes the struct to a buffer", () => {
             const data = Buffer.alloc(10, 99);
             structType.write(data, 3, { x: 5, y: 10 });
@@ -72,6 +72,41 @@ describe("StructType", () => {
             expect(structType2.getField("x").offset).toEqual(0);
             expect(structType2.getField("y").offset).toEqual(2);
             expect(structType2.getField("z").offset).toEqual(6);
+        });
+    });
+});
+
+describe("TailStructType", () => {
+    interface MyTailStruct extends TailStruct<boolean> {
+        x: number,
+        y: number,
+    }
+    const tailStructType = new TailStructType<MyTailStruct>([
+        { name: "x", type: new IntType(2) },
+        { name: "y", type: new IntType(1) },
+    ], boolType);
+    
+    describe("read", () => {
+        it("reads the tail struct from a buffer without tail", () => {
+            const data = Buffer.from([99, 99, 99, 5, 0, 10, 0, 1, 0, 99]);
+            const value = tailStructType.read(data, 3);
+            expect(value).toEqual({ x: 5, y: 10, _tail: null });
+        });
+    });
+    
+    describe("readWithTail", () => {
+        it("reads the tail struct from a buffer with tail", () => {
+            const data = Buffer.from([99, 99, 99, 5, 0, 10, 0, 1, 0, 99]);
+            const value = tailStructType.readWithTail(data, 3, 3);
+            expect(value).toEqual({ x: 5, y: 10, _tail: [false, true, false] });
+        });
+    });
+    
+    describe("write", () => {
+        it("writes the tail struct to a buffer", () => {
+            const data = Buffer.alloc(10, 99);
+            tailStructType.write(data, 3, { x: 5, y: 10, _tail: [false, true, false] });
+            expect(data.compare(Buffer.from([99, 99, 99, 5, 0, 10, 0, 1, 0, 99]))).toEqual(0);
         });
     });
 });

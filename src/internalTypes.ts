@@ -9,9 +9,11 @@ export interface Struct {
     _flavor?: { name: "Struct" };
 }
 
-export interface TailStruct<T> extends Struct {
+export interface TailStruct<T = any> extends Struct {
     _tail: T[];
 }
+
+export type TailStructElement<T> = T extends TailStruct<infer T2> ? T2 : never;
 
 export interface Field<T = any> {
     name: string;
