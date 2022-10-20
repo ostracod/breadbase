@@ -95,15 +95,23 @@ export class StructType<T extends Struct> implements DataType<T> {
     fieldMap: Map<string, ResolvedField>;
     size: number;
     
-    constructor(fields: Field[]) {
+    constructor(fields: Field[], superType?: StructType<Partial<T>>) {
         this.fieldMap = new Map();
-        let offset = 0;
-        for (const field of fields) {
-            const resolvedField: ResolvedField = { ...field, offset };
-            this.fieldMap.set(resolvedField.name, resolvedField);
-            offset += resolvedField.type.getSize();
+        this.size = 0;
+        if (typeof superType !== "undefined") {
+            superType.fieldMap.forEach((field) => {
+                this.addField(field);
+            });
         }
-        this.size = offset;
+        for (const field of fields) {
+            this.addField(field);
+        }
+    }
+    
+    addField(field: Field) {
+        const resolvedField: ResolvedField = { ...field, offset: this.size };
+        this.fieldMap.set(resolvedField.name, resolvedField);
+        this.size += resolvedField.type.getSize();
     }
     
     getSize(): number {

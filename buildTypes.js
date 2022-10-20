@@ -130,38 +130,77 @@ class Field {
     }
 }
 
+
+class FlavorField {
+    
+    getNestedCode() {
+        return "_flavor?: { name: \"Struct\" }";
+    }
+    
+    getInstanceCode() {
+        throw new Error("Cannot get instance of flavor field.");
+    }
+}
+
 class StructType extends DataType {
     
     constructor(data) {
         super(data);
-        this.fields = data.fields.map((data) => (
-            new Field(data.name, convertDataToType(data.type))
-        ));
+        this.allFields = [];
+        this.subTypeFields = [];
+        const superTypeName = data.superType;
+        if (typeof superTypeName === "undefined") {
+            this.superTypeName = null;
+            this.allFields.push(new FlavorField());
+        } else {
+            this.superTypeName = superTypeName;
+            const superType = typeMap.get(this.superTypeName);
+            superType.allFields.forEach((field) => {
+                this.allFields.push(field);
+            });
+        }
+        data.fields.forEach((data) => {
+            const field = new Field(data.name, convertDataToType(data.type));
+            this.allFields.push(field);
+            this.subTypeFields.push(field);
+        });
     }
     
     getDeclarationCode(name, instanceName) {
         const resultText = [];
-        resultText.push(`export interface ${name} extends Struct {`);
-        for (const field of this.fields) {
+        const superInterfaceName = (this.superTypeName === null) ? "Struct" : this.superTypeName;
+        resultText.push(`export interface ${name} extends ${superInterfaceName} {`);
+        for (const field of this.subTypeFields) {
             resultText.push(`    ${field.getNestedCode()};`);
         }
         resultText.push(`}\n\nexport const ${instanceName} = new StructType<${name}>([`);
-        for (const field of this.fields) {
+        for (const field of this.subTypeFields) {
             resultText.push(`    ${field.getInstanceCode()},`);
         }
-        resultText.push(`]);\n`);
+        if (this.superTypeName === null) {
+            resultText.push("]);\n");
+        } else {
+            const superInstanceName = getTypeInstanceName(this.superTypeName);
+            resultText.push(`], ${superInstanceName});\n`);
+        }
         return resultText.join("\n");
     }
     
     getNestedCode() {
-        const fieldsCode = this.fields.map((field) => field.getNestedCode());
+        const fieldsCode = this.allFields.map((field) => field.getNestedCode());
         fieldsCode.push("_flavor?: { name: \"Struct\" }");
         return `{ ${fieldsCode.join(", ")} }`;
     }
     
     getInstanceCode() {
-        const fieldsCode = this.fields.map((field) => field.getInstanceCode());
-        return `new StructType([${fieldsCode.join(", ")}])`;
+        const fieldsCode = this.subTypeFields.map((field) => field.getInstanceCode());
+        const resultText = [`new StructType([${fieldsCode.join(", ")}`];
+        if (this.superTypeName !== null) {
+            const superInstanceName = getTypeInstanceName(this.superTypeName);
+            resultText.push(", " + superInstanceName);
+        }
+        resultText.push("])");
+        return resultText.join("");
     }
 }
 

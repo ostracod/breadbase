@@ -3,7 +3,7 @@ import { Selector, Value, Index } from "./types.js";
 import { DataType } from "./internalTypes.js";
 import { spanDegreeAmount } from "./constants.js";
 import { StoragePointer, NullPointer } from "./storagePointer.js";
-import { storageHeaderType, SpanHeader, spanHeaderType, emptySpanHeaderType } from "./builtTypes.js";
+import { storageHeaderType, spanHeaderType, EmptySpanHeader, emptySpanHeaderType } from "./builtTypes.js";
 import { Storage, FileStorage } from "./storage.js";
 
 // Methods and member variables which are not marked as public are meant
@@ -11,8 +11,8 @@ import { Storage, FileStorage } from "./storage.js";
 
 export class BreadBase {
     storage: Storage;
-    emptySpansByDegree: StoragePointer<SpanHeader>[];
-    finalSpan: StoragePointer<SpanHeader>;
+    emptySpansByDegree: StoragePointer<EmptySpanHeader>[];
+    finalSpan: StoragePointer<EmptySpanHeader>;
     
     public async init(directoryPath: string): Promise<void> {
         const storage = new FileStorage();
@@ -53,16 +53,15 @@ export class BreadBase {
     }
     
     async createEmptyDb(): Promise<void> {
-        const headerSize1 = storageHeaderType.getSize();
-        const headerSize2 = spanHeaderType.getSize();
-        const headerSize3 = emptySpanHeaderType.getSize();
+        const storageHeaderSize = storageHeaderType.getSize();
         const nullSpanPointer = new NullPointer(spanHeaderType);
+        const nullEmptySpanPointer = new NullPointer(emptySpanHeaderType);
         this.emptySpansByDegree = [];
         while (this.emptySpansByDegree.length < spanDegreeAmount) {
-            this.emptySpansByDegree.push(nullSpanPointer);
+            this.emptySpansByDegree.push(nullEmptySpanPointer);
         }
-        this.finalSpan = new StoragePointer(headerSize1, spanHeaderType);
-        await this.storage.setSize(headerSize1 + headerSize2 + headerSize3);
+        this.finalSpan = new StoragePointer(storageHeaderSize, emptySpanHeaderType);
+        await this.storage.setSize(storageHeaderSize + emptySpanHeaderType.getSize());
         await this.storage.write(
             new StoragePointer(0, storageHeaderType),
             {
@@ -75,17 +74,12 @@ export class BreadBase {
             {
                 previousByNeighbor: nullSpanPointer,
                 nextByNeighbor: nullSpanPointer,
-                size: -1,
+                spanSize: -1,
                 degree: -1,
                 isEmpty: true,
+                previousByDegree: nullEmptySpanPointer,
+                nextByDegree: nullEmptySpanPointer,
             }
-        );
-        await this.storage.write(
-            new StoragePointer(headerSize1 + headerSize2, emptySpanHeaderType),
-            {
-                previousByDegree: nullSpanPointer,
-                nextByDegree: nullSpanPointer,
-            },
         );
         await this.storage.markVersion();
     }

@@ -6,13 +6,13 @@
                 "class": "ArrayType",
                 "elementType": {
                     "class": "StoragePointerType",
-                    "elementType": "SpanHeader"
+                    "elementType": "EmptySpanHeader"
                 },
                 "length": "spanDegreeAmount"
             } },
             { "name": "finalSpan", "type": {
                 "class": "StoragePointerType",
-                "elementType": "SpanHeader"
+                "elementType": "EmptySpanHeader"
             } }
         ]
     } },
@@ -27,7 +27,7 @@
                 "class": "StoragePointerType",
                 "elementType": "SpanHeader"
             } },
-            { "name": "size", "type": {
+            { "name": "spanSize", "type": {
                 "class": "IntType",
                 "size": 6
             } },
@@ -42,25 +42,27 @@
     } },
     { "name": "EmptySpanHeader", "type": {
         "class": "StructType",
+        "superType": "SpanHeader",
         "fields": [
             { "name": "previousByDegree", "type": {
                 "class": "StoragePointerType",
-                "elementType": "SpanHeader"
+                "elementType": "EmptySpanHeader"
             } },
             { "name": "nextByDegree", "type": {
                 "class": "StoragePointerType",
-                "elementType": "SpanHeader"
+                "elementType": "EmptySpanHeader"
             } }
         ]
     } },
     { "name": "AllocHeader", "type": {
         "class": "StructType",
+        "superType": "SpanHeader",
         "fields": [
             { "name": "type", "type": {
                 "class": "IntType",
                 "size": 1
             } },
-            { "name": "size", "type": {
+            { "name": "allocSize", "type": {
                 "class": "IntType",
                 "size": 4
             } }

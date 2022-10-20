@@ -1,6 +1,6 @@
 
 import { Struct } from "../src/internalTypes.js";
-import { IntType, ArrayType, StructType } from "../src/dataType.js"
+import { BoolType, IntType, ArrayType, StructType } from "../src/dataType.js"
 
 describe("ArrayType", () => {
     const arrayType = new ArrayType(new IntType(2), 3);
@@ -57,6 +57,21 @@ describe("StructType", () => {
             const data = Buffer.alloc(10, 99);
             structType.write(data, 3, { x: 5, y: 10 });
             expect(data.compare(Buffer.from([99, 99, 99, 5, 0, 10, 0, 0, 0, 99]))).toEqual(0);
+        });
+    });
+    
+    describe("inheritance", () => {
+        it("inherits fields of super type", () => {
+            interface MyStruct2 extends MyStruct {
+                z: boolean,
+            }
+            const structType2 = new StructType<MyStruct2>([
+                { name: "z", type: new BoolType() },
+            ], structType);
+            expect(structType2.getSize()).toEqual(7);
+            expect(structType2.getField("x").offset).toEqual(0);
+            expect(structType2.getField("y").offset).toEqual(2);
+            expect(structType2.getField("z").offset).toEqual(6);
         });
     });
 });

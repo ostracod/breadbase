@@ -13,7 +13,7 @@ describe("BreadBase", () => {
             expect(breadBase.emptySpansByDegree.length).toEqual(spanDegreeAmount);
             expect(breadBase.finalSpan.index).toEqual(storageHeaderType.getSize());
             expect(storage.getSize()).toEqual(
-                storageHeaderType.getSize() + spanHeaderType.getSize() + emptySpanHeaderType.getSize(),
+                storageHeaderType.getSize() + emptySpanHeaderType.getSize(),
             );
         });
     });
