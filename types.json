@@ -29,7 +29,7 @@
             } },
             { "name": "spanSize", "type": {
                 "class": "IntType",
-                "size": 6
+                "size": 4
             } },
             { "name": "degree", "type": {
                 "class": "IntType",
@@ -60,7 +60,8 @@
         "fields": [
             { "name": "type", "type": {
                 "class": "IntType",
-                "size": 1
+                "size": 1,
+                "enumType": "AllocType"
             } },
             { "name": "allocSize", "type": {
                 "class": "IntType",

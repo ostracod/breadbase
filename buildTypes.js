@@ -70,10 +70,12 @@ class IntType extends DataType {
     constructor(data) {
         super(data);
         this.size = data.size;
+        const { enumType } = data;
+        this.enumType = (typeof enumType === "undefined") ? null : enumType;
     }
     
     getNestedCode() {
-        return "number";
+        return (this.enumType === null) ? "number" : this.enumType;
     }
     
     getInstanceCode() {
@@ -259,7 +261,7 @@ const convertDataToType = (data) => {
     return new typeConstructor(data);
 };
 
-const resultText = ["\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount } from \"./constants.js\";\nimport { boolType, IntType, StoragePointerType, ArrayType, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
+const resultText = ["\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount, AllocType } from \"./constants.js\";\nimport { boolType, IntType, StoragePointerType, ArrayType, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
 
 const typeMap = new Map();
 const declarationsText = [];

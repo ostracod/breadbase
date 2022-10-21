@@ -10,14 +10,19 @@ export class StoragePointer<T> {
         this.index = index;
         this.type = type as DataType<T>;
     }
-}
-
-export class NullPointer<T> extends StoragePointer<T> {
     
-    constructor(type: DataType<T>) {
-        super(0, type);
+    isNull(): boolean {
+        return (this.index === 0);
+    }
+    
+    convert<T2>(type: DataType<T2>): StoragePointer<T2> {
+        return new StoragePointer(this.index, type);
     }
 }
+
+export const createNullPointer = <T>(type: DataType<T>): StoragePointer<T> => (
+    new StoragePointer(0, type)
+);
 
 export const getArrayElementPointer = <T>(
     pointer: StoragePointer<T[]>,
