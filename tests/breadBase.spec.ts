@@ -28,15 +28,14 @@ describe("BreadBase", () => {
             const breadBase = new BreadBase();
             const storage = new MemoryStorage();
             await breadBase.initWithStorage(storage);
-            await breadBase.createAlloc(AllocType.Node, 50);
+            const allocPointer = await breadBase.createAlloc(AllocType.Node, 50);
+            expect(allocPointer).toEqual(new StoragePointer(storageHeaderSize, allocType));
             const finalSpanPointer = new StoragePointer(
                 storageHeaderSize + 73,
                 emptySpanType,
             );
             expect(breadBase.finalSpan).toEqual(finalSpanPointer);
-            const alloc = await storage.read(
-                new StoragePointer(storageHeaderSize, allocType),
-            );
+            const alloc = await storage.read(allocPointer);
             expect(alloc).toEqual({
                 previousByNeighbor: nullSpanPointer,
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 73, spanType),
@@ -49,6 +48,28 @@ describe("BreadBase", () => {
             const finalSpan = await storage.read(finalSpanPointer);
             expect(finalSpan).toEqual({
                 previousByNeighbor: new StoragePointer(storageHeaderSize, spanType),
+                nextByNeighbor: nullSpanPointer,
+                spanSize: -1,
+                degree: -1,
+                isEmpty: true,
+                previousByDegree: nullEmptySpanPointer,
+                nextByDegree: nullEmptySpanPointer,
+            });
+        });
+    });
+    
+    describe("deleteAlloc", () => {
+        it("merges with final span", async () => {
+            const breadBase = new BreadBase();
+            const storage = new MemoryStorage();
+            await breadBase.initWithStorage(storage);
+            const allocPointer = await breadBase.createAlloc(AllocType.Node, 50);
+            await breadBase.deleteAlloc(allocPointer);
+            const finalSpanPointer = new StoragePointer(storageHeaderSize, emptySpanType);
+            expect(breadBase.finalSpan).toEqual(finalSpanPointer);
+            const finalSpan = await storage.read(finalSpanPointer);
+            expect(finalSpan).toEqual({
+                previousByNeighbor: nullSpanPointer,
                 nextByNeighbor: nullSpanPointer,
                 spanSize: -1,
                 degree: -1,

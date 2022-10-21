@@ -124,27 +124,53 @@ export class BreadBase {
         );
     }
     
-    async popEmptySpanByDegree(degree: number): Promise<StoragePointer<EmptySpan> | null> {
+    async removeEmptySpanHelper(
+        span: StoragePointer<EmptySpan>,
+        degree: number,
+    ): Promise<void> {
+        const previousSpan = await this.storage.read(
+            getStructFieldPointer(span, "previousByDegree"),
+        );
+        const nextSpan = await this.storage.read(
+            getStructFieldPointer(span, "nextByDegree"),
+        );
+        if (previousSpan.isNull()) {
+            await this.setEmptySpanByDegree(nextSpan, degree);
+        } else {
+            await this.storage.write(
+                getStructFieldPointer(previousSpan, "nextByDegree"),
+                nextSpan,
+            );
+        }
+        if (!nextSpan.isNull()) {
+            await this.storage.write(
+                getStructFieldPointer(nextSpan, "previousByDegree"),
+                previousSpan,
+            );
+        }
+    }
+    
+    async removeEmptySpan(span: StoragePointer<EmptySpan>): Promise<void> {
+        const degree = await this.storage.read(
+            getStructFieldPointer(span, "degree"),
+        );
+        if (degree >= 0) {
+            await this.removeEmptySpanHelper(span, degree);
+        }
+    }
+    
+    async popEmptySpan(degree: number): Promise<StoragePointer<EmptySpan> | null> {
         const span = this.emptySpansByDegree[degree];
         if (span.isNull()) {
             return null;
         }
-        const nextSpan = await this.storage.read(
-            getStructFieldPointer(span, "nextByDegree"),
-        );
-        if (!nextSpan.isNull()) {
-            await this.storage.write(
-                getStructFieldPointer(nextSpan, "previousByDegree"),
-                nullEmptySpanPointer,
-            );
-        }
-        await this.setEmptySpanByDegree(nextSpan, degree);
+        await this.removeEmptySpanHelper(span, degree);
         return span;
     }
     
     // This method returns the next span with the given
     // degree, and does not modify the `span` argument.
-    async pushEmptySpanByDegree(
+    async pushEmptySpan(
         span: StoragePointer<EmptySpan>,
         degree: number,
     ): Promise<StoragePointer<EmptySpan>> {
@@ -164,8 +190,9 @@ export class BreadBase {
         const usedSize = usedSizeWithHeader - spanType.getSize()
         let degree = allocUtils.convertSizeToDegree(usedSize - 1) + 1;
         let emptySpan: StoragePointer<EmptySpan> = null;
+        // TODO: Make this more efficient by storing a list of bitfields.
         while (degree < this.emptySpansByDegree.length) {
-            const tempSpan = await this.popEmptySpanByDegree(degree);
+            const tempSpan = await this.popEmptySpan(degree);
             if (tempSpan !== null) {
                 emptySpan = tempSpan;
                 break;
@@ -212,7 +239,7 @@ export class BreadBase {
                     await this.storage.setSize(endIndex);
                 }
             } else {
-                nextByDegree = await this.pushEmptySpanByDegree(splitSpan, splitDegree);
+                nextByDegree = await this.pushEmptySpan(splitSpan, splitDegree);
                 await this.storage.write(
                     getStructFieldPointer(nextSpan, "previousByNeighbor"),
                     splitSpan,
@@ -247,9 +274,67 @@ export class BreadBase {
         return output;
     }
     
-    async deleteAlloc(pointer: StoragePointer<Alloc>): Promise<void> {
-        // TODO: Implement.
-        
+    async deleteAlloc(alloc: StoragePointer<Alloc>): Promise<void> {
+        let previousSpan = await this.storage.read(
+            getStructFieldPointer(alloc, "previousByNeighbor"),
+        );
+        const nextSpan = await this.storage.read(
+            getStructFieldPointer(alloc, "nextByNeighbor"),
+        );
+        let linkSpan1 = alloc.convert(emptySpanType);
+        let linkSpan2 = nextSpan;
+        if (!previousSpan.isNull()) {
+            const isEmpty = await this.storage.read(
+                getStructFieldPointer(previousSpan, "isEmpty"),
+            )
+            if (isEmpty) {
+                linkSpan1 = previousSpan.convert(emptySpanType);
+                await this.removeEmptySpan(linkSpan1);
+                previousSpan = await this.storage.read(
+                    getStructFieldPointer(linkSpan1, "previousByNeighbor"),
+                );
+            }
+        }
+        if (!nextSpan.isNull()) {
+            const isEmpty = await this.storage.read(
+                getStructFieldPointer(nextSpan, "isEmpty"),
+            )
+            if (isEmpty) {
+                linkSpan2 = await this.storage.read(
+                    getStructFieldPointer(nextSpan, "nextByNeighbor"),
+                );
+                await this.removeEmptySpan(nextSpan.convert(emptySpanType));
+            }
+        }
+        let spanSize: number;
+        let degree: number;
+        let nextByDegree: StoragePointer<EmptySpan>;
+        if (linkSpan2.isNull()) {
+            spanSize = -1;
+            degree = -1;
+            nextByDegree = nullEmptySpanPointer;
+            await this.setFinalSpan(linkSpan1);
+        } else {
+            spanSize = linkSpan2.index - (linkSpan1.index + spanType.getSize());
+            degree = allocUtils.convertSizeToDegree(spanSize);
+            nextByDegree = await this.pushEmptySpan(linkSpan1, degree);
+            await this.storage.write(
+                getStructFieldPointer(linkSpan2, "previousByNeighbor"),
+                linkSpan1,
+            );
+        }
+        await this.storage.write(
+            linkSpan1,
+            {
+                previousByNeighbor: previousSpan,
+                nextByNeighbor: linkSpan2,
+                spanSize,
+                degree,
+                isEmpty: true,
+                previousByDegree: nullEmptySpanPointer,
+                nextByDegree,
+            },
+        );
     }
 }
 
