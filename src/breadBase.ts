@@ -1,10 +1,10 @@
 
 import { Selector, Value, Index } from "./types.js";
-import { DataType } from "./internalTypes.js";
+import { DataType, Struct, TreeItem } from "./internalTypes.js";
 import { spanDegreeAmount, AllocType } from "./constants.js";
 import * as allocUtils from "./allocUtils.js";
 import { StoragePointer, createNullPointer, getArrayElementPointer, getStructFieldPointer } from "./storagePointer.js";
-import { storageHeaderType, spanType, EmptySpan, emptySpanType, Alloc, allocType } from "./builtTypes.js";
+import { storageHeaderType, spanType, EmptySpan, emptySpanType, Alloc, allocType, TreeRoot } from "./builtTypes.js";
 import { Storage, FileStorage } from "./storage.js";
 
 // Methods and member variables which are not marked as public are meant
@@ -102,6 +102,21 @@ export class BreadBase {
         }
     }
     
+    async readStructField<T1 extends Struct, T2 extends string & (keyof T1)>(
+        pointer: StoragePointer<T1>,
+        name: T2,
+    ): Promise<T1[T2]> {
+        return await this.storage.read(getStructFieldPointer(pointer, name));
+    }
+    
+    async writeStructField<T1 extends Struct, T2 extends string & (keyof T1)>(
+        pointer: StoragePointer<T1>,
+        name: T2,
+        value: T1[T2],
+    ): Promise<void> {
+        await this.storage.write(getStructFieldPointer(pointer, name), value);
+    }
+    
     async setEmptySpanByDegree(
         span: StoragePointer<EmptySpan>,
         degree: number,
@@ -118,42 +133,27 @@ export class BreadBase {
     
     async setFinalSpan(span: StoragePointer<EmptySpan>): Promise<void> {
         this.finalSpan = span;
-        await this.storage.write(
-            getStructFieldPointer(storageHeaderPointer, "finalSpan"),
-            this.finalSpan,
-        );
+        await this.writeStructField(storageHeaderPointer, "finalSpan", this.finalSpan);
     }
     
     async removeEmptySpanHelper(
         span: StoragePointer<EmptySpan>,
         degree: number,
     ): Promise<void> {
-        const previousSpan = await this.storage.read(
-            getStructFieldPointer(span, "previousByDegree"),
-        );
-        const nextSpan = await this.storage.read(
-            getStructFieldPointer(span, "nextByDegree"),
-        );
+        const previousSpan = await this.readStructField(span, "previousByDegree");
+        const nextSpan = await this.readStructField(span, "nextByDegree");
         if (previousSpan.isNull()) {
             await this.setEmptySpanByDegree(nextSpan, degree);
         } else {
-            await this.storage.write(
-                getStructFieldPointer(previousSpan, "nextByDegree"),
-                nextSpan,
-            );
+            await this.writeStructField(previousSpan, "nextByDegree", nextSpan);
         }
         if (!nextSpan.isNull()) {
-            await this.storage.write(
-                getStructFieldPointer(nextSpan, "previousByDegree"),
-                previousSpan,
-            );
+            await this.writeStructField(nextSpan, "previousByDegree", previousSpan);
         }
     }
     
     async removeEmptySpan(span: StoragePointer<EmptySpan>): Promise<void> {
-        const degree = await this.storage.read(
-            getStructFieldPointer(span, "degree"),
-        );
+        const degree = await this.readStructField(span, "degree");
         if (degree >= 0) {
             await this.removeEmptySpanHelper(span, degree);
         }
@@ -176,10 +176,7 @@ export class BreadBase {
     ): Promise<StoragePointer<EmptySpan>> {
         const nextSpan = this.emptySpansByDegree[degree];
         if (!nextSpan.isNull()) {
-            await this.storage.write(
-                getStructFieldPointer(nextSpan, "previousByDegree"),
-                span,
-            );
+            await this.writeStructField(nextSpan, "previousByDegree", span);
         }
         await this.setEmptySpanByDegree(span, degree);
         return nextSpan;
@@ -202,9 +199,7 @@ export class BreadBase {
         if (emptySpan === null) {
             emptySpan = this.finalSpan;
         }
-        let spanSize = await this.storage.read(
-            getStructFieldPointer(emptySpan, "spanSize"),
-        );
+        let spanSize = await this.readStructField(emptySpan, "spanSize");
         const unusedSize = (spanSize < 0) ? -1 : spanSize - usedSize;
         if (unusedSize < 0 || unusedSize >= minimumSpanSplitSize) {
             spanSize = usedSize;
@@ -212,21 +207,14 @@ export class BreadBase {
                 emptySpan.index + usedSizeWithHeader,
                 emptySpanType,
             );
-            await this.storage.write(
-                getStructFieldPointer(emptySpan, "spanSize"),
-                spanSize,
-            );
-            await this.storage.write(
-                getStructFieldPointer(emptySpan, "degree"),
+            await this.writeStructField(emptySpan, "spanSize", spanSize);
+            await this.writeStructField(
+                emptySpan,
+                "degree",
                 allocUtils.convertSizeToDegree(spanSize),
             );
-            const nextSpan = await this.storage.read(
-                getStructFieldPointer(emptySpan, "nextByNeighbor"),
-            );
-            await this.storage.write(
-                getStructFieldPointer(emptySpan, "nextByNeighbor"),
-                splitSpan,
-            );
+            const nextSpan = await this.readStructField(emptySpan, "nextByNeighbor");
+            await this.writeStructField(emptySpan, "nextByNeighbor", splitSpan);
             const splitSize = (unusedSize < 0) ? -1 : unusedSize - spanType.getSize();
             const splitDegree = allocUtils.convertSizeToDegree(splitSize);
             let nextByDegree: StoragePointer<EmptySpan>;
@@ -240,10 +228,7 @@ export class BreadBase {
                 }
             } else {
                 nextByDegree = await this.pushEmptySpan(splitSpan, splitDegree);
-                await this.storage.write(
-                    getStructFieldPointer(nextSpan, "previousByNeighbor"),
-                    splitSpan,
-                );
+                await this.writeStructField(nextSpan, "previousByNeighbor", splitSpan);
             }
             await this.storage.write(
                 splitSpan,
@@ -259,50 +244,29 @@ export class BreadBase {
             );
         }
         const output = emptySpan.convert(allocType);
-        await this.storage.write(
-            getStructFieldPointer(output, "isEmpty"),
-            false,
-        );
-        await this.storage.write(
-            getStructFieldPointer(output, "type"),
-            type,
-        );
-        await this.storage.write(
-            getStructFieldPointer(output, "allocSize"),
-            size,
-        );
+        await this.writeStructField(output, "isEmpty", false);
+        await this.writeStructField(output, "type", type);
+        await this.writeStructField(output, "allocSize", size);
         return output;
     }
     
     async deleteAlloc(alloc: StoragePointer<Alloc>): Promise<void> {
-        let previousSpan = await this.storage.read(
-            getStructFieldPointer(alloc, "previousByNeighbor"),
-        );
-        const nextSpan = await this.storage.read(
-            getStructFieldPointer(alloc, "nextByNeighbor"),
-        );
+        let previousSpan = await this.readStructField(alloc, "previousByNeighbor");
+        const nextSpan = await this.readStructField(alloc, "nextByNeighbor");
         let linkSpan1 = alloc.convert(emptySpanType);
         let linkSpan2 = nextSpan;
         if (!previousSpan.isNull()) {
-            const isEmpty = await this.storage.read(
-                getStructFieldPointer(previousSpan, "isEmpty"),
-            )
+            const isEmpty = await this.readStructField(previousSpan, "isEmpty");
             if (isEmpty) {
                 linkSpan1 = previousSpan.convert(emptySpanType);
                 await this.removeEmptySpan(linkSpan1);
-                previousSpan = await this.storage.read(
-                    getStructFieldPointer(linkSpan1, "previousByNeighbor"),
-                );
+                previousSpan = await this.readStructField(linkSpan1, "previousByNeighbor");
             }
         }
         if (!nextSpan.isNull()) {
-            const isEmpty = await this.storage.read(
-                getStructFieldPointer(nextSpan, "isEmpty"),
-            )
+            const isEmpty = await this.readStructField(nextSpan, "isEmpty");
             if (isEmpty) {
-                linkSpan2 = await this.storage.read(
-                    getStructFieldPointer(nextSpan, "nextByNeighbor"),
-                );
+                linkSpan2 = await this.readStructField(nextSpan, "nextByNeighbor");
                 await this.removeEmptySpan(nextSpan.convert(emptySpanType));
             }
         }
@@ -318,10 +282,7 @@ export class BreadBase {
             spanSize = linkSpan2.index - (linkSpan1.index + spanType.getSize());
             degree = allocUtils.convertSizeToDegree(spanSize);
             nextByDegree = await this.pushEmptySpan(linkSpan1, degree);
-            await this.storage.write(
-                getStructFieldPointer(linkSpan2, "previousByNeighbor"),
-                linkSpan1,
-            );
+            await this.writeStructField(linkSpan2, "previousByNeighbor", linkSpan1);
         }
         await this.storage.write(
             linkSpan1,
@@ -335,6 +296,39 @@ export class BreadBase {
                 nextByDegree,
             },
         );
+    }
+    
+    async findTreeItemByIndex(
+        root: StoragePointer<TreeRoot>,
+        index: number,
+    ): Promise<TreeItem> {
+        let startIndex = 0;
+        let node = await this.readStructField(root, "child");
+        while (true) {
+            const content = await this.readStructField(node, "treeContent");
+            const length = await this.readStructField(content, "contentLength");
+            const leftChild = await this.readStructField(node, "leftChild");
+            let leftIndex = startIndex;
+            if (!leftChild.isNull()) {
+                leftIndex += await this.readStructField(leftChild, "totalLength");
+            }
+            if (index >= leftIndex) {
+                const rightIndex = leftIndex + length;
+                if (index < rightIndex) {
+                    startIndex = leftIndex;
+                    break;
+                } else {
+                    startIndex = rightIndex;
+                    node = await this.readStructField(node, "rightChild");
+                }
+            } else {
+                node = leftChild;
+            }
+        }
+        return {
+            content: await this.readStructField(node, "treeContent"),
+            index: index - startIndex,
+        };
     }
 }
 

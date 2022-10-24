@@ -1,4 +1,7 @@
 
+import { TreeContent } from "./builtTypes.js";
+import { StoragePointer } from "./storagePointer.js";
+
 export interface DataType<T = any> {
     getSize(): number;
     read(data: Buffer, offset: number): T;
@@ -22,6 +25,12 @@ export interface Field<T = any> {
 
 export interface ResolvedField<T = any> extends Field<T> {
     offset: number;
+}
+
+export interface TreeItem {
+    content: StoragePointer<TreeContent>;
+    // Number of items after `startIndex` in `content`.
+    index: number;
 }
 
 

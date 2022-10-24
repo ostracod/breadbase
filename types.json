@@ -69,9 +69,74 @@
             } }
         ]
     } },
+    { "name": "TreeRoot", "type": {
+        "class": "StructType",
+        "superType": "Alloc",
+        "fields": [
+            { "name": "child", "type": {
+                "class": "StoragePointerType",
+                "elementType": "TreeNode"
+            } }
+        ]
+    } },
+    { "name": "TreeNode", "type": {
+        "class": "StructType",
+        "superType": "Alloc",
+        "fields": [
+            { "name": "parentPointer", "type": {
+                "class": "StoragePointerType",
+                "elementType": {
+                    "class": "StoragePointerType",
+                    "elementType": "TreeNode"
+                }
+            } },
+            { "name": "leftChild", "type": {
+                "class": "StoragePointerType",
+                "elementType": "TreeNode"
+            } },
+            { "name": "rightChild", "type": {
+                "class": "StoragePointerType",
+                "elementType": "TreeNode"
+            } },
+            { "name": "maximumDepth", "type": {
+                "class": "IntType",
+                "size": 2
+            } },
+            { "name": "totalLength", "type": {
+                "class": "IntType",
+                "size": 4
+            } },
+            { "name": "treeContent", "type": {
+                "class": "StoragePointerType",
+                "elementType": "TreeContent"
+            } }
+        ]
+    } },
+    { "name": "TreeContent", "type": {
+        "class": "StructType",
+        "superType": "Alloc",
+        "fields": [
+            { "name": "parent", "type": {
+                "class": "StoragePointerType",
+                "elementType": "TreeNode"
+            } },
+            { "name": "contentLength", "type": {
+                "class": "IntType",
+                "size": 4
+            } },
+            { "name": "startIndex", "type": {
+                "class": "IntType",
+                "size": 4
+            } },
+            { "name": "endIndex", "type": {
+                "class": "IntType",
+                "size": 4
+            } }
+        ]
+    } },
     { "name": "AsciiStringChars", "type": {
         "class": "TailStructType",
-        "superType": "Alloc",
+        "superType": "TreeContent",
         "fields": [],
         "elementType": {
             "class": "IntType",
