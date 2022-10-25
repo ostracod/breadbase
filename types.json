@@ -83,12 +83,9 @@
         "class": "StructType",
         "superType": "Alloc",
         "fields": [
-            { "name": "parentPointer", "type": {
+            { "name": "parent", "type": {
                 "class": "StoragePointerType",
-                "elementType": {
-                    "class": "StoragePointerType",
-                    "elementType": "TreeNode"
-                }
+                "elementType": "Alloc"
             } },
             { "name": "leftChild", "type": {
                 "class": "StoragePointerType",
@@ -120,7 +117,7 @@
                 "class": "StoragePointerType",
                 "elementType": "TreeNode"
             } },
-            { "name": "contentLength", "type": {
+            { "name": "bufferLength", "type": {
                 "class": "IntType",
                 "size": 4
             } },
@@ -128,13 +125,13 @@
                 "class": "IntType",
                 "size": 4
             } },
-            { "name": "endIndex", "type": {
+            { "name": "itemCount", "type": {
                 "class": "IntType",
                 "size": 4
             } }
         ]
     } },
-    { "name": "AsciiStringChars", "type": {
+    { "name": "StringAsciiChars", "type": {
         "class": "TailStructType",
         "superType": "TreeContent",
         "fields": [],

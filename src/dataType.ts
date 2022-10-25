@@ -137,7 +137,7 @@ export class StructType<T extends Struct> implements DataType<T> {
     }
 }
 
-export class TailStructType<T extends TailStruct> extends StructType<T> {
+export class TailStructType<T extends TailStruct = TailStruct> extends StructType<T> {
     elementType: DataType<TailStructElement<T>>;
     
     constructor(
