@@ -1,4 +1,7 @@
 
+import { TreeDirection } from "./constants.js";
+import { NodeChildKey } from "./internalTypes.js";
+
 export const findFirstBit = (value: number): number => {
     if (value <= 0) {
         return -1;
@@ -44,5 +47,17 @@ export const convertSizeToDegree = (size: number): number => {
     const exponent = findFirstBit(adjustedSize) - 6;
     return (exponent << 2) + ((adjustedSize - (64 << exponent)) >> (exponent + 4));
 };
+
+export const getOppositeDirection = (direction: TreeDirection): TreeDirection => (
+    (direction === TreeDirection.Forward) ? TreeDirection.Backward : TreeDirection.Forward
+);
+
+export const getChildKey = (direction: TreeDirection): NodeChildKey => (
+    (direction === TreeDirection.Forward) ? "rightChild" : "leftChild"
+);
+
+export const getOppositeChildKey = (direction: TreeDirection): NodeChildKey => (
+    getChildKey(getOppositeDirection(direction))
+);
 
 

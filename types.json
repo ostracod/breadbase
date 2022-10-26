@@ -121,10 +121,6 @@
                 "class": "IntType",
                 "size": 4
             } },
-            { "name": "startIndex", "type": {
-                "class": "IntType",
-                "size": 4
-            } },
             { "name": "itemCount", "type": {
                 "class": "IntType",
                 "size": 4

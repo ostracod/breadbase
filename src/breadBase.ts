@@ -1,17 +1,18 @@
 
 import { Selector, Value, Index } from "./types.js";
-import { DataType, Struct, TreeItem } from "./internalTypes.js";
-import { spanDegreeAmount, AllocType } from "./constants.js";
+import { DataType, Struct, TreeItem, NodeChildKey, TreeNodeMetrics } from "./internalTypes.js";
+import { spanDegreeAmount, AllocType, TreeDirection } from "./constants.js";
 import * as allocUtils from "./allocUtils.js";
-import { StoragePointer, createNullPointer, getArrayElementPointer, getStructFieldPointer } from "./storagePointer.js";
+import { StoragePointer, createNullPointer, getArrayElementPointer, getStructFieldPointer, getTailElementPointer } from "./storagePointer.js";
 import { storageHeaderType, spanType, EmptySpan, emptySpanType, Alloc, allocType, TreeRoot, TreeNode, treeNodeType } from "./builtTypes.js";
 import { Storage, FileStorage } from "./storage.js";
-import { ContentAccessor } from "./contentAccessor.js";
+import { ContentAccessor, contentTypeMap } from "./contentAccessor.js";
 
 const storageHeaderSize = storageHeaderType.getSize();
 const storageHeaderPointer = new StoragePointer(0, storageHeaderType);
 const nullSpanPointer = createNullPointer(spanType);
 const nullEmptySpanPointer = createNullPointer(emptySpanType);
+const nullTreeNodePointer = createNullPointer(treeNodeType);
 // Includes both the header and data region.
 const minimumSpanSplitSize = Math.max(emptySpanType.getSize(), allocType.getSize() + 20);
 
@@ -118,6 +119,15 @@ export class BreadBase {
         await this.storage.write(getStructFieldPointer(pointer, name), value);
     }
     
+    async writeStructFields<T extends Struct>(
+        pointer: StoragePointer<T>,
+        values: Partial<T>
+    ): Promise<void> {
+        for (const key in values) {
+            await this.writeStructField(pointer, key, values[key]);
+        }
+    }
+    
     async setEmptySpanByDegree(
         span: StoragePointer<EmptySpan>,
         degree: number,
@@ -208,12 +218,10 @@ export class BreadBase {
                 emptySpan.index + usedSizeWithHeader,
                 emptySpanType,
             );
-            await this.writeStructField(emptySpan, "spanSize", spanSize);
-            await this.writeStructField(
-                emptySpan,
-                "degree",
-                allocUtils.convertSizeToDegree(spanSize),
-            );
+            await this.writeStructFields(emptySpan, {
+                spanSize,
+                degree: allocUtils.convertSizeToDegree(spanSize),
+            });
             const nextSpan = await this.readStructField(emptySpan, "nextByNeighbor");
             await this.writeStructField(emptySpan, "nextByNeighbor", splitSpan);
             const splitSize = (unusedSize < 0) ? -1 : unusedSize - spanType.getSize();
@@ -245,9 +253,11 @@ export class BreadBase {
             );
         }
         const output = emptySpan.convert(allocType);
-        await this.writeStructField(output, "isEmpty", false);
-        await this.writeStructField(output, "type", type);
-        await this.writeStructField(output, "allocSize", size);
+        await this.writeStructFields(output, {
+            isEmpty: false,
+            type,
+            allocSize: size,
+        });
         return output;
     }
     
@@ -334,7 +344,7 @@ export class BreadBase {
     
     async iterateTreeContent(
         node: StoragePointer<TreeNode>,
-        direction: 1 | -1,
+        direction: TreeDirection,
         handle: (value: any) => Promise<boolean>,
     ): Promise<boolean> {
         const content = await this.readStructField(node, "treeContent");
@@ -360,26 +370,33 @@ export class BreadBase {
         return false;
     }
     
-    async iterateTreeForwardHelper(
+    async iterateTreeHelper(
         node: StoragePointer<TreeNode>,
+        direction: TreeDirection,
         handle: (value: any) => Promise<boolean>,
     ): Promise<boolean> {
-        const leftChild = await this.readStructField(node, "leftChild");
-        if (!leftChild.isNull()) {
-            const result = await this.iterateTreeForwardHelper(leftChild, handle);
+        const previousChild = await this.readStructField(
+            node,
+            allocUtils.getOppositeChildKey(direction),
+        );
+        if (!previousChild.isNull()) {
+            const result = await this.iterateTreeHelper(previousChild, direction, handle);
             if (result) {
                 return true;
             }
         }
-        const result = await this.iterateTreeContent(node, 1, handle);
+        const result = await this.iterateTreeContent(node, direction, handle);
         if (result) {
             return true;
         }
-        const rightChild = await this.readStructField(node, "rightChild");
-        if (rightChild.isNull()) {
+        const nextChild = await this.readStructField(
+            node,
+            allocUtils.getChildKey(direction),
+        );
+        if (nextChild.isNull()) {
             return false;
         } else {
-            return await this.iterateTreeForwardHelper(rightChild, handle)
+            return await this.iterateTreeHelper(nextChild, direction, handle);
         }
     }
     
@@ -389,30 +406,7 @@ export class BreadBase {
         handle: (value: any) => Promise<boolean>,
     ): Promise<void> {
         const node = await this.readStructField(root, "child");
-        await this.iterateTreeForwardHelper(node, handle);
-    }
-    
-    async iterateTreeBackwardHelper(
-        node: StoragePointer<TreeNode>,
-        handle: (value: any) => Promise<boolean>,
-    ): Promise<boolean> {
-        const rightChild = await this.readStructField(node, "rightChild");
-        if (!rightChild.isNull()) {
-            const result = await this.iterateTreeBackwardHelper(rightChild, handle);
-            if (result) {
-                return true;
-            }
-        }
-        const result = await this.iterateTreeContent(node, -1, handle);
-        if (result) {
-            return true;
-        }
-        const leftChild = await this.readStructField(node, "leftChild");
-        if (leftChild.isNull()) {
-            return false;
-        } else {
-            return await this.iterateTreeBackwardHelper(leftChild, handle)
-        }
+        await this.iterateTreeHelper(node, TreeDirection.Forward, handle);
     }
     
     async iterateTreeBackward(
@@ -421,12 +415,16 @@ export class BreadBase {
         handle: (value: any) => Promise<boolean>,
     ): Promise<void> {
         const node = await this.readStructField(root, "child");
-        await this.iterateTreeBackwardHelper(node, handle);
+        await this.iterateTreeHelper(node, TreeDirection.Backward, handle);
     }
     
-    async getNextTreeNode(node: StoragePointer<TreeNode>): Promise<StoragePointer<TreeNode>> {
-        const rightChild = await this.readStructField(node, "rightChild");
-        if (rightChild.isNull()) {
+    async getNeighborTreeNode(
+        node: StoragePointer<TreeNode>,
+        direction: TreeDirection,
+    ): Promise<StoragePointer<TreeNode>> {
+        const nextChild = await this.readStructField(node, allocUtils.getChildKey(direction));
+        const oppositeChildKey = allocUtils.getOppositeChildKey(direction);
+        if (nextChild.isNull()) {
             let child = node;
             while (true) {
                 const parent = await this.readStructField(node, "parent");
@@ -435,22 +433,35 @@ export class BreadBase {
                     return null;
                 }
                 const parentNode = parent.convert(treeNodeType);
-                const leftChild = await this.readStructField(parentNode, "leftChild");
-                if (leftChild.index === child.index) {
+                const previousChild = await this.readStructField(
+                    parentNode,
+                    oppositeChildKey,
+                );
+                if (previousChild.index === child.index) {
                     return parentNode;
                 }
                 child = parentNode;
             }
         } else {
-            let output = rightChild;
+            let output = nextChild;
             while (true) {
-                const leftChild = await this.readStructField(output, "leftChild");
-                if (leftChild.isNull()) {
+                const previousChild = await this.readStructField(output, oppositeChildKey);
+                if (previousChild.isNull()) {
                     return output;
                 }
-                output = leftChild;
+                output = previousChild;
             }
         }
+    }
+    
+    async getNextTreeNode(node: StoragePointer<TreeNode>): Promise<StoragePointer<TreeNode>> {
+        return this.getNeighborTreeNode(node, TreeDirection.Forward);
+    }
+    
+    async getPreviousTreeNode(
+        node: StoragePointer<TreeNode>,
+    ): Promise<StoragePointer<TreeNode>> {
+        return this.getNeighborTreeNode(node, TreeDirection.Backward);
     }
     
     // Returns the first item for which `compare` returns 0 or 1.
@@ -491,6 +502,108 @@ export class BreadBase {
             node = await this.getNextTreeNode(node);
         }
         return null;
+    }
+    
+    async createTreeNode(
+        contentAllocType: AllocType,
+        bufferLength: number,
+        values: any[],
+    ): Promise<StoragePointer<TreeNode>> {
+        const output = (await this.createAlloc(
+            AllocType.Node,
+            treeNodeType.getSize() - allocType.getSize(),
+        )).convert(treeNodeType);
+        const contentType = contentTypeMap.get(contentAllocType);
+        const content = (await this.createAlloc(
+            contentAllocType,
+            contentType.getSizeWithTail(bufferLength) - allocType.getSize(),
+        )).convert(contentType);
+        await this.writeStructFields(content, {
+            bufferLength,
+            itemCount: values.length,
+        });
+        for (let index = 0; index < values.length; index++) {
+            await this.storage.write(getTailElementPointer(content, index), values[index]);
+        }
+        await this.writeStructFields(output, {
+            leftChild: nullTreeNodePointer,
+            rightChild: nullTreeNodePointer,
+            maximumDepth: 1,
+            totalLength: values.length,
+            treeContent: content,
+        });
+        await this.writeStructField(output, "treeContent", content);
+        return output;
+    }
+    
+    async getTreeNodeMetrics(node: StoragePointer<TreeNode>): Promise<TreeNodeMetrics> {
+        if (node.isNull()) {
+            return { depth: 0, length: 0 };
+        }
+        return {
+            length: await this.readStructField(node, "totalLength"),
+            depth: await this.readStructField(node, "maximumDepth"),
+        };
+    }
+    
+    async updateTreeNodeMetrics(node: StoragePointer<TreeNode>): Promise<void> {
+        const leftChild = await this.readStructField(node, "leftChild");
+        const leftMetrics = await this.getTreeNodeMetrics(leftChild);
+        const rightChild = await this.readStructField(node, "rightChild");
+        const rightMetrics = await this.getTreeNodeMetrics(rightChild);
+        const content = await this.readStructField(node, "treeContent");
+        const contentLength = await this.readStructField(content, "itemCount");
+        await this.writeStructFields(node, {
+            maximumDepth: Math.max(leftMetrics.depth, rightMetrics.depth) + 1,
+            totalLength: leftMetrics.length + rightMetrics.length + contentLength,
+        });
+    }
+    
+    async setTreeNodeChild(
+        parent: StoragePointer<TreeNode>,
+        child: StoragePointer<TreeNode>,
+        childKey: NodeChildKey,
+    ): Promise<void> {
+        await this.writeStructField(parent, childKey, child);
+        if (!child.isNull()) {
+            await this.writeStructField(child, "parent", parent);
+        }
+        await this.updateTreeNodeMetrics(parent);
+    }
+    
+    // `node` will be inserted before `nextNode` with respect to `direction`.
+    async insertTreeNode(
+        node: StoragePointer<TreeNode>,
+        nextNode: StoragePointer<TreeNode>,
+        direction: TreeDirection,
+    ): Promise<void> {
+        const oppositeDirection = allocUtils.getOppositeDirection(direction)
+        const oppositeChildKey = allocUtils.getChildKey(oppositeDirection);
+        const previousChild = await this.readStructField(nextNode, oppositeChildKey);
+        if (previousChild.isNull()) {
+            await this.setTreeNodeChild(nextNode, node, oppositeChildKey);
+        } else {
+            const previousNode = await this.getNeighborTreeNode(node, oppositeDirection);
+            const childKey = allocUtils.getChildKey(direction);
+            await this.setTreeNodeChild(previousNode, node, childKey);
+        }
+        // TODO: Balance the tree.
+    }
+    
+    async deleteTreeNode(node: StoragePointer<TreeNode>): Promise<void> {
+        // TODO: Implement.
+        
+    }
+    
+    // `values` will be inserted before `nextItem`.
+    async insertTreeItems(values: any[], nextItem: TreeItem): Promise<void> {
+        // TODO: Implement.
+        
+    }
+    
+    async deleteTreeItem(item: TreeItem): Promise<void> {
+        // TODO: Implement.
+        
     }
 }
 

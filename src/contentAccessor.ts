@@ -6,7 +6,7 @@ import { AllocType } from "./constants.js";
 import { Storage } from "./storage.js";
 import { StoragePointer, getStructFieldPointer, getTailElementPointer } from "./storagePointer.js";
 
-const contentTypeMap: Map<AllocType, TailStructType<TreeContent & TailStruct>> = new Map([
+export const contentTypeMap: Map<AllocType, TailStructType<TreeContent & TailStruct>> = new Map([
     [AllocType.StringAsciiChars, stringAsciiCharsType],
 ]);
 
@@ -14,7 +14,6 @@ export class ContentAccessor {
     storage: Storage;
     content: StoragePointer<TreeContent & TailStruct>;
     tailStructType: TailStructType;
-    startIndex: number;
     itemCount: number;
     bufferLength: number;
     
@@ -23,9 +22,7 @@ export class ContentAccessor {
         const allocType = await this.storage.read(getStructFieldPointer(content, "type"));
         const tailStructType = contentTypeMap.get(allocType);
         this.content = content.convert(tailStructType);
-        this.startIndex = await this.readContentField("startIndex");
         this.itemCount = null;
-        this.bufferLength = null;
     }
     
     async readContentField<T extends string & (keyof TreeContent)>(
@@ -42,16 +39,7 @@ export class ContentAccessor {
     }
     
     async readItem(index: number): Promise<any> {
-        let bufferIndex: number;
-        if (index === 0) {
-            bufferIndex = this.startIndex;
-        } else {
-            if (this.bufferLength === null) {
-                this.bufferLength = await this.readContentField("bufferLength");
-            }
-            bufferIndex = (this.startIndex + index) % this.bufferLength;
-        }
-        return await this.storage.read(getTailElementPointer(this.content, bufferIndex));
+        return await this.storage.read(getTailElementPointer(this.content, index));
     }
 }
 

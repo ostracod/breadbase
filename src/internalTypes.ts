@@ -33,4 +33,11 @@ export interface TreeItem {
     index: number;
 }
 
+export type NodeChildKey = "leftChild" | "rightChild";
+
+export interface TreeNodeMetrics {
+    depth: number;
+    length: number;
+}
+
 

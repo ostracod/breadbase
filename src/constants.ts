@@ -8,4 +8,9 @@ export enum AllocType {
     StringAsciiChars = 3,
 }
 
+export enum TreeDirection {
+    Backward = -1,
+    Forward = 1,
+}
+
 
