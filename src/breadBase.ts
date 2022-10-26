@@ -3,13 +3,10 @@ import { Selector, Value, Index } from "./types.js";
 import { DataType, Struct, TreeItem } from "./internalTypes.js";
 import { spanDegreeAmount, AllocType } from "./constants.js";
 import * as allocUtils from "./allocUtils.js";
-import { TailStructType } from "./dataType.js";
-import { StoragePointer, createNullPointer, getArrayElementPointer, getStructFieldPointer, getTailElementPointer } from "./storagePointer.js";
-import { storageHeaderType, spanType, EmptySpan, emptySpanType, Alloc, allocType, TreeRoot, TreeNode, treeNodeType, stringAsciiCharsType } from "./builtTypes.js";
+import { StoragePointer, createNullPointer, getArrayElementPointer, getStructFieldPointer } from "./storagePointer.js";
+import { storageHeaderType, spanType, EmptySpan, emptySpanType, Alloc, allocType, TreeRoot, TreeNode, treeNodeType } from "./builtTypes.js";
 import { Storage, FileStorage } from "./storage.js";
-
-// Methods and member variables which are not marked as public are meant
-// to be used internally or in automated tests.
+import { ContentAccessor } from "./contentAccessor.js";
 
 const storageHeaderSize = storageHeaderType.getSize();
 const storageHeaderPointer = new StoragePointer(0, storageHeaderType);
@@ -18,9 +15,8 @@ const nullEmptySpanPointer = createNullPointer(emptySpanType);
 // Includes both the header and data region.
 const minimumSpanSplitSize = Math.max(emptySpanType.getSize(), allocType.getSize() + 20);
 
-const contentTypeMap: Map<AllocType, TailStructType> = new Map([
-    [AllocType.StringAsciiChars, stringAsciiCharsType],
-]);
+// Methods and member variables which are not marked as public are meant
+// to be used internally or in automated tests.
 
 export class BreadBase {
     storage: Storage;
@@ -41,11 +37,11 @@ export class BreadBase {
         throw new Error("Not yet implemented.");
     }
     
-    public async append(path: Selector[], value: Value): Promise<void> {
+    public async appendElem(path: Selector[], value: Value): Promise<void> {
         throw new Error("Not yet implemented.");
     }
     
-    public async extend(path: Selector[], values: Value[]): Promise<void> {
+    public async appendElems(path: Selector[], values: Value[]): Promise<void> {
         throw new Error("Not yet implemented.");
     }
     
@@ -342,11 +338,9 @@ export class BreadBase {
         handle: (value: any) => Promise<boolean>,
     ): Promise<boolean> {
         const content = await this.readStructField(node, "treeContent");
-        const allocType = await this.readStructField(content, "type");
-        const tailStructType = contentTypeMap.get(allocType);
-        const bufferLength = await this.readStructField(content, "bufferLength");
-        const bufferStartIndex = await this.readStructField(content, "startIndex");
-        const itemCount = await this.readStructField(content, "itemCount");
+        const accessor = new ContentAccessor();
+        await accessor.init(this.storage, content);
+        const itemCount = await accessor.getItemCount();
         let startIndex: number;
         let endIndex: number;
         if (direction > 0) {
@@ -357,12 +351,7 @@ export class BreadBase {
             endIndex = -1;
         }
         for (let index = startIndex; index !== endIndex; index += direction) {
-            const value = await this.storage.read(
-                getTailElementPointer(
-                    content.convert(tailStructType),
-                    (bufferStartIndex + index) % bufferLength,
-                ),
-            );
+            const value = await accessor.readItem(index);
             const result = await handle(value);
             if (result) {
                 return true;
@@ -438,15 +427,6 @@ export class BreadBase {
     async getNextTreeNode(node: StoragePointer<TreeNode>): Promise<StoragePointer<TreeNode>> {
         const rightChild = await this.readStructField(node, "rightChild");
         if (rightChild.isNull()) {
-            let output = rightChild;
-            while (true) {
-                const leftChild = await this.readStructField(output, "leftChild");
-                if (leftChild.isNull()) {
-                    return output;
-                }
-                output = leftChild;
-            }
-        } else {
             let child = node;
             while (true) {
                 const parent = await this.readStructField(node, "parent");
@@ -461,12 +441,21 @@ export class BreadBase {
                 }
                 child = parentNode;
             }
+        } else {
+            let output = rightChild;
+            while (true) {
+                const leftChild = await this.readStructField(output, "leftChild");
+                if (leftChild.isNull()) {
+                    return output;
+                }
+                output = leftChild;
+            }
         }
     }
     
     // Returns the first item for which `compare` returns 0 or 1.
     async findTreeItemByComparison(
-        // Must be sorted by `comparator`.
+        // Must be sorted by `compare`.
         root: StoragePointer<TreeRoot>,
         // `compare` returns 0 if `value` has match, 1 if `value`
         // is too late, and -1 if `value` is too early.
@@ -476,12 +465,9 @@ export class BreadBase {
         let startNode: StoragePointer<TreeNode> = null;
         while (!node.isNull()) {
             const content = await this.readStructField(node, "treeContent");
-            const allocType = await this.readStructField(content, "type");
-            const tailStructType = contentTypeMap.get(allocType);
-            const startIndex = await this.readStructField(content, "startIndex");
-            const value = await this.storage.read(
-                getTailElementPointer(content.convert(tailStructType), startIndex),
-            );
+            const accessor = new ContentAccessor();
+            await accessor.init(this.storage, content);
+            const value = await accessor.readItem(0);
             if (await compare(value) < 0) {
                 startNode = node;
                 node = await this.readStructField(node, "rightChild");
@@ -492,18 +478,12 @@ export class BreadBase {
         node = startNode;
         while (true) {
             const content = await this.readStructField(node, "treeContent");
-            const allocType = await this.readStructField(content, "type");
-            const tailStructType = contentTypeMap.get(allocType);
-            const bufferLength = await this.readStructField(content, "bufferLength");
-            const startIndex = await this.readStructField(content, "startIndex");
-            const itemCount = await this.readStructField(content, "itemCount");
+            const accessor = new ContentAccessor();
+            await accessor.init(this.storage, content);
+            const itemCount = await accessor.getItemCount();
+            // TODO: Use binary search.
             for (let index = 0; index < itemCount; index++) {
-                const value = await this.storage.read(
-                    getTailElementPointer(
-                        content.convert(tailStructType),
-                        (startIndex + index) % bufferLength,
-                    ),
-                );
+                const value = await accessor.readItem(index);
                 if (await compare(value) >= 0) {
                     return { content, index };
                 }
