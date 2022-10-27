@@ -1,22 +1,22 @@
 
 import { spanDegreeAmount, AllocType } from "../src/constants.js";
 import { storageHeaderType, spanType, emptySpanType, allocType } from "../src/builtTypes.js";
-import { MemoryStorage } from "../src/storage.js"
-import { StoragePointer, createNullPointer } from "../src/storagePointer.js"
-import { BreadBase } from "../src/breadBase.js"
+import { MemoryStorage } from "../src/storage.js";
+import { StoragePointer, createNullPointer } from "../src/storagePointer.js";
+import { HeapAllocator } from "../src/heapAllocator.js";
 
 const storageHeaderSize = storageHeaderType.getSize();
 const nullSpanPointer = createNullPointer(spanType);
 const nullEmptySpanPointer = createNullPointer(emptySpanType);
 
-describe("BreadBase", () => {
-    describe("createEmptyDb", () => {
+describe("HeapAllocator", () => {
+    describe("createEmptyHeap", () => {
         it("creates a list of empty spans", async () => {
-            const breadBase = new BreadBase();
             const storage = new MemoryStorage();
-            await breadBase.initWithStorage(storage);
-            expect(breadBase.emptySpansByDegree.length).toEqual(spanDegreeAmount);
-            expect(breadBase.finalSpan.index).toEqual(storageHeaderType.getSize());
+            const allocator = new HeapAllocator(storage);
+            await allocator.createEmptyHeap();
+            expect(allocator.emptySpansByDegree.length).toEqual(spanDegreeAmount);
+            expect(allocator.finalSpan.index).toEqual(storageHeaderType.getSize());
             expect(storage.getSize()).toEqual(
                 storageHeaderSize + emptySpanType.getSize(),
             );
@@ -25,17 +25,17 @@ describe("BreadBase", () => {
     
     describe("createAlloc", () => {
         it("splits final span", async () => {
-            const breadBase = new BreadBase();
             const storage = new MemoryStorage();
-            await breadBase.initWithStorage(storage);
-            const allocPointer = await breadBase.createAlloc(AllocType.Node, 50);
+            const allocator = new HeapAllocator(storage);
+            await allocator.createEmptyHeap();
+            const allocPointer = await allocator.createAlloc(AllocType.Node, 50);
             expect(allocPointer).toEqual(new StoragePointer(storageHeaderSize, allocType));
             const finalSpanPointer = new StoragePointer(
                 storageHeaderSize + 73,
                 emptySpanType,
             );
-            expect(breadBase.finalSpan).toEqual(finalSpanPointer);
-            const alloc = await storage.read(allocPointer);
+            expect(allocator.finalSpan).toEqual(finalSpanPointer);
+            const alloc = await allocator.read(allocPointer);
             expect(alloc).toEqual({
                 previousByNeighbor: nullSpanPointer,
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 73, spanType),
@@ -45,7 +45,7 @@ describe("BreadBase", () => {
                 type: 1,
                 allocSize: 50,
             });
-            const finalSpan = await storage.read(finalSpanPointer);
+            const finalSpan = await allocator.read(finalSpanPointer);
             expect(finalSpan).toEqual({
                 previousByNeighbor: new StoragePointer(storageHeaderSize, spanType),
                 nextByNeighbor: nullSpanPointer,
@@ -58,15 +58,15 @@ describe("BreadBase", () => {
         });
         
         it("splits non-final span", async () => {
-            const breadBase = new BreadBase();
             const storage = new MemoryStorage();
-            await breadBase.initWithStorage(storage);
-            const allocPointer1 = await breadBase.createAlloc(AllocType.Node, 200);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.deleteAlloc(allocPointer1);
-            const allocPointer3 = await breadBase.createAlloc(AllocType.Node, 50);
+            const allocator = new HeapAllocator(storage);
+            await allocator.createEmptyHeap();
+            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 200);
+            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.deleteAlloc(allocPointer1);
+            const allocPointer3 = await allocator.createAlloc(AllocType.Node, 50);
             expect(allocPointer3).toEqual(new StoragePointer(storageHeaderSize, allocType));
-            const alloc3 = await storage.read(allocPointer3);
+            const alloc3 = await allocator.read(allocPointer3);
             expect(alloc3).toEqual({
                 previousByNeighbor: nullSpanPointer,
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 73, spanType),
@@ -80,7 +80,7 @@ describe("BreadBase", () => {
                 storageHeaderSize + 73,
                 emptySpanType,
             );
-            const emptySpan = await storage.read(emptySpanPointer);
+            const emptySpan = await allocator.read(emptySpanPointer);
             expect(emptySpan).toEqual({
                 previousByNeighbor: new StoragePointer(storageHeaderSize, spanType),
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 223, spanType),
@@ -90,20 +90,20 @@ describe("BreadBase", () => {
                 previousByDegree: nullEmptySpanPointer,
                 nextByDegree: nullEmptySpanPointer,
             });
-            expect(breadBase.emptySpansByDegree[8]).toEqual(nullEmptySpanPointer);
-            expect(breadBase.emptySpansByDegree[6]).toEqual(emptySpanPointer);
+            expect(allocator.emptySpansByDegree[8]).toEqual(nullEmptySpanPointer);
+            expect(allocator.emptySpansByDegree[6]).toEqual(emptySpanPointer);
         });
         
         it("does not split non-final span", async () => {
-            const breadBase = new BreadBase();
             const storage = new MemoryStorage();
-            await breadBase.initWithStorage(storage);
-            const allocPointer1 = await breadBase.createAlloc(AllocType.Node, 65);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.deleteAlloc(allocPointer1);
-            const allocPointer3 = await breadBase.createAlloc(AllocType.Node, 50);
+            const allocator = new HeapAllocator(storage);
+            await allocator.createEmptyHeap();
+            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 65);
+            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.deleteAlloc(allocPointer1);
+            const allocPointer3 = await allocator.createAlloc(AllocType.Node, 50);
             expect(allocPointer3).toEqual(new StoragePointer(storageHeaderSize, allocType));
-            const alloc3 = await storage.read(allocPointer3);
+            const alloc3 = await allocator.read(allocPointer3);
             expect(alloc3).toEqual({
                 previousByNeighbor: nullSpanPointer,
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 88, spanType),
@@ -115,17 +115,17 @@ describe("BreadBase", () => {
             });
         });
         it("does not use gap which is too small", async () => {
-            const breadBase = new BreadBase();
             const storage = new MemoryStorage();
-            await breadBase.initWithStorage(storage);
-            const allocPointer1 = await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.deleteAlloc(allocPointer1);
-            const allocPointer3 = await breadBase.createAlloc(AllocType.Node, 70);
+            const allocator = new HeapAllocator(storage);
+            await allocator.createEmptyHeap();
+            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.deleteAlloc(allocPointer1);
+            const allocPointer3 = await allocator.createAlloc(AllocType.Node, 70);
             expect(allocPointer3).toEqual(
                 new StoragePointer(storageHeaderSize + 146, allocType),
             );
-            const alloc3 = await storage.read(allocPointer3);
+            const alloc3 = await allocator.read(allocPointer3);
             expect(alloc3).toEqual({
                 previousByNeighbor: new StoragePointer(storageHeaderSize + 73, spanType),
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 239, spanType),
@@ -140,14 +140,14 @@ describe("BreadBase", () => {
     
     describe("deleteAlloc", () => {
         it("merges with final span", async () => {
-            const breadBase = new BreadBase();
             const storage = new MemoryStorage();
-            await breadBase.initWithStorage(storage);
-            const allocPointer = await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.deleteAlloc(allocPointer);
+            const allocator = new HeapAllocator(storage);
+            await allocator.createEmptyHeap();
+            const allocPointer = await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.deleteAlloc(allocPointer);
             const finalSpanPointer = new StoragePointer(storageHeaderSize, emptySpanType);
-            expect(breadBase.finalSpan).toEqual(finalSpanPointer);
-            const finalSpan = await storage.read(finalSpanPointer);
+            expect(allocator.finalSpan).toEqual(finalSpanPointer);
+            const finalSpan = await allocator.read(finalSpanPointer);
             expect(finalSpan).toEqual({
                 previousByNeighbor: nullSpanPointer,
                 nextByNeighbor: nullSpanPointer,
@@ -160,14 +160,14 @@ describe("BreadBase", () => {
         });
         
         it("deletes alloc at beginning", async () => {
-            const breadBase = new BreadBase();
             const storage = new MemoryStorage();
-            await breadBase.initWithStorage(storage);
-            const allocPointer1 = await breadBase.createAlloc(AllocType.Node, 200);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.deleteAlloc(allocPointer1);
+            const allocator = new HeapAllocator(storage);
+            await allocator.createEmptyHeap();
+            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 200);
+            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.deleteAlloc(allocPointer1);
             const emptySpanPointer = new StoragePointer(storageHeaderSize, emptySpanType);
-            const emptySpan = await storage.read(emptySpanPointer);
+            const emptySpan = await allocator.read(emptySpanPointer);
             expect(emptySpan).toEqual({
                 previousByNeighbor: nullSpanPointer,
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 223, spanType),
@@ -177,20 +177,20 @@ describe("BreadBase", () => {
                 previousByDegree: nullEmptySpanPointer,
                 nextByDegree: nullEmptySpanPointer,
             });
-            expect(breadBase.emptySpansByDegree[8]).toEqual(emptySpanPointer);
+            expect(allocator.emptySpansByDegree[8]).toEqual(emptySpanPointer);
         });
         
         it("deletes alloc between two allocs", async () => {
-            const breadBase = new BreadBase();
             const storage = new MemoryStorage();
-            await breadBase.initWithStorage(storage);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            const allocPointer1 = await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.deleteAlloc(allocPointer1);
-            const emptySpan = await storage.read(
+            const allocator = new HeapAllocator(storage);
+            await allocator.createEmptyHeap();
+            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.deleteAlloc(allocPointer1);
+            const emptySpan = await allocator.read(
                 new StoragePointer(storageHeaderSize + 146, emptySpanType),
             );
             expect(emptySpan).toEqual({
@@ -205,17 +205,17 @@ describe("BreadBase", () => {
         });
         
         it("deletes alloc before alloc", async () => {
-            const breadBase = new BreadBase();
             const storage = new MemoryStorage();
-            await breadBase.initWithStorage(storage);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            const allocPointer1 = await breadBase.createAlloc(AllocType.Node, 50);
-            const allocPointer2 = await breadBase.createAlloc(AllocType.Node, 50);
-            const allocPointer3 = await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.deleteAlloc(allocPointer1);
-            await breadBase.deleteAlloc(allocPointer2);
-            const emptySpan = await storage.read(
+            const allocator = new HeapAllocator(storage);
+            await allocator.createEmptyHeap();
+            await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer2 = await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer3 = await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.deleteAlloc(allocPointer1);
+            await allocator.deleteAlloc(allocPointer2);
+            const emptySpan = await allocator.read(
                 new StoragePointer(storageHeaderSize + 73, emptySpanType),
             );
             expect(emptySpan).toEqual({
@@ -227,7 +227,7 @@ describe("BreadBase", () => {
                 previousByDegree: nullEmptySpanPointer,
                 nextByDegree: nullEmptySpanPointer,
             });
-            const alloc3 = await storage.read(allocPointer3);
+            const alloc3 = await allocator.read(allocPointer3);
             expect(alloc3).toEqual({
                 previousByNeighbor: new StoragePointer(storageHeaderSize + 73, spanType),
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 292, spanType),
@@ -240,17 +240,17 @@ describe("BreadBase", () => {
         });
         
         it("deletes alloc after alloc", async () => {
-            const breadBase = new BreadBase();
             const storage = new MemoryStorage();
-            await breadBase.initWithStorage(storage);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            const allocPointer1 = await breadBase.createAlloc(AllocType.Node, 50);
-            const allocPointer2 = await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.deleteAlloc(allocPointer2);
-            await breadBase.deleteAlloc(allocPointer1);
-            const emptySpan = await storage.read(
+            const allocator = new HeapAllocator(storage);
+            await allocator.createEmptyHeap();
+            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer2 = await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.deleteAlloc(allocPointer2);
+            await allocator.deleteAlloc(allocPointer1);
+            const emptySpan = await allocator.read(
                 new StoragePointer(storageHeaderSize + 146, emptySpanType),
             );
             expect(emptySpan).toEqual({
@@ -265,18 +265,18 @@ describe("BreadBase", () => {
         });
         
         it("merges two empty spans", async () => {
-            const breadBase = new BreadBase();
             const storage = new MemoryStorage();
-            await breadBase.initWithStorage(storage);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            const allocPointer1 = await breadBase.createAlloc(AllocType.Node, 50);
-            const allocPointer2 = await breadBase.createAlloc(AllocType.Node, 50);
-            const allocPointer3 = await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.createAlloc(AllocType.Node, 50);
-            await breadBase.deleteAlloc(allocPointer1);
-            await breadBase.deleteAlloc(allocPointer3);
-            await breadBase.deleteAlloc(allocPointer2);
-            const emptySpan = await storage.read(
+            const allocator = new HeapAllocator(storage);
+            await allocator.createEmptyHeap();
+            await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer2 = await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer3 = await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.deleteAlloc(allocPointer1);
+            await allocator.deleteAlloc(allocPointer3);
+            await allocator.deleteAlloc(allocPointer2);
+            const emptySpan = await allocator.read(
                 new StoragePointer(storageHeaderSize + 73, emptySpanType),
             );
             expect(emptySpan).toEqual({

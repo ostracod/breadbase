@@ -1,37 +1,12 @@
 
-import { DataType, TailStruct } from "./internalTypes.js";
-import { TailStructType } from "./dataType.js";
-import { StoragePointer } from "./storagePointer.js";
-
 export abstract class Storage {
     
     abstract getSize(): number;
     abstract setSize(size: number): Promise<void>;
-    abstract readBuffer(index: number, size: number): Promise<Buffer>;
-    abstract writeBuffer(index: number, data: Buffer): Promise<void>;
+    abstract read(index: number, size: number): Promise<Buffer>;
+    abstract write(index: number, data: Buffer): Promise<void>;
     abstract getVersion(): number | null;
     abstract markVersion(): Promise<void>;
-    
-    async read<T>(pointer: StoragePointer<T>): Promise<T> {
-        const data = await this.readBuffer(pointer.index, pointer.type.getSize());
-        return pointer.type.read(data, 0);
-    }
-    
-    async readTailStruct<T extends TailStruct>(
-        pointer: StoragePointer<T>,
-        length: number,
-    ): Promise<T> {
-        const tailStructType = pointer.type as TailStructType<T>;
-        const size = tailStructType.getSizeWithTail(length);
-        const data = await this.readBuffer(pointer.index, size);
-        return tailStructType.readWithTail(data, 0, length);
-    }
-    
-    async write<T>(pointer: StoragePointer<T>, value: T): Promise<void> {
-        const data = Buffer.alloc(pointer.type.getSize());
-        pointer.type.write(data, 0, value);
-        await this.writeBuffer(pointer.index, data);
-    }
 }
 
 export class FileStorage extends Storage {
@@ -48,11 +23,11 @@ export class FileStorage extends Storage {
         throw new Error("Not yet implemented.");
     }
     
-    async readBuffer(index: number, size: number): Promise<Buffer> {
+    async read(index: number, size: number): Promise<Buffer> {
         throw new Error("Not yet implemented.");
     }
     
-    async writeBuffer(index: number, data: Buffer): Promise<void> {
+    async write(index: number, data: Buffer): Promise<void> {
         throw new Error("Not yet implemented.");
     }
     
@@ -87,11 +62,11 @@ export class MemoryStorage extends Storage {
         }
     }
     
-    async readBuffer(index: number, size: number): Promise<Buffer> {
+    async read(index: number, size: number): Promise<Buffer> {
         return this.data.subarray(index, index + size);
     }
     
-    async writeBuffer(index: number, data: Buffer): Promise<void> {
+    async write(index: number, data: Buffer): Promise<void> {
         data.copy(this.data, index);
     }
     
