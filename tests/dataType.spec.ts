@@ -1,6 +1,6 @@
 
 import { Struct, TailStruct } from "../src/internalTypes.js";
-import { BoolType, boolType, IntType, ArrayType, StructType, TailStructType } from "../src/dataType.js"
+import { BoolType, boolType, IntType, ArrayType, StructType, TailStructType } from "../src/dataType.js";
 
 describe("ArrayType", () => {
     const arrayType = new ArrayType(new IntType(2), 3);

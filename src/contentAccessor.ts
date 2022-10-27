@@ -1,6 +1,6 @@
 
 import { TailStruct } from "./internalTypes.js";
-import { StructType, TailStructType } from "./dataType.js";
+import { TailStructType } from "./dataType.js";
 import { TreeContent, stringAsciiCharsType } from "./builtTypes.js";
 import { AllocType } from "./constants.js";
 import { Storage } from "./storage.js";
@@ -32,7 +32,7 @@ export class ContentAccessor extends StorageAccessor {
     }
     
     async getItemCount(): Promise<number> {
-        if (this.itemCount == null) {
+        if (this.itemCount === null) {
             this.itemCount = await this.readContentField("itemCount");
         }
         return this.itemCount;

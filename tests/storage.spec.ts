@@ -1,5 +1,5 @@
 
-import { MemoryStorage } from "../src/storage.js"
+import { MemoryStorage } from "../src/storage.js";
 
 describe("MemoryStorage", () => {
     describe("setSize", () => {

@@ -1,7 +1,7 @@
 
 import { Struct, TailStruct } from "../src/internalTypes.js";
-import { IntType, ArrayType, StructType, TailStructType } from "../src/dataType.js"
-import { StoragePointer, getArrayElementPointer, getStructFieldPointer, getTailElementPointer } from "../src/storagePointer.js"
+import { IntType, ArrayType, StructType, TailStructType } from "../src/dataType.js";
+import { StoragePointer, getArrayElementPointer, getStructFieldPointer, getTailElementPointer } from "../src/storagePointer.js";
 
 describe("getArrayElementPointer", () => {
     it("creates a pointer to an element in an array", async () => {

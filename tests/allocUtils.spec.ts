@@ -1,5 +1,5 @@
 
-import * as allocUtils from "../src/allocUtils.js"
+import * as allocUtils from "../src/allocUtils.js";
 
 describe("allocUtils", () => {
     describe("findFirstBit", () => {
@@ -8,7 +8,7 @@ describe("allocUtils", () => {
                 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01, 0x00,
             ].map(allocUtils.findFirstBit);
             expect(indexes).toEqual([
-                7, 6, 5, 4, 3, 2, 1, 0, -1
+                7, 6, 5, 4, 3, 2, 1, 0, -1,
             ]);
         });
     });
@@ -27,10 +27,10 @@ describe("allocUtils", () => {
     describe("convertSizeToDegree", () => {
         it("converts span degree to number of bytes", () => {
             const degrees = [
-                63, 64, 65, 95, 96, 97, 127, 128, 129, 159, 160, 161, 191, 192, 193
+                63, 64, 65, 95, 96, 97, 127, 128, 129, 159, 160, 161, 191, 192, 193,
             ].map(allocUtils.convertSizeToDegree);
             expect(degrees).toEqual([
-                3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8
+                3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8,
             ]);
         });
     });

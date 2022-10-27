@@ -46,7 +46,7 @@ export class HeapAllocator extends StorageAccessor {
                 isEmpty: true,
                 previousByDegree: nullEmptySpanPointer,
                 nextByDegree: nullEmptySpanPointer,
-            }
+            },
         );
     }
     
@@ -125,7 +125,7 @@ export class HeapAllocator extends StorageAccessor {
     
     async createAlloc(type: AllocType, size: number): Promise<StoragePointer<Alloc>> {
         const usedSizeWithHeader = allocType.getSize() + size;
-        const usedSize = usedSizeWithHeader - spanType.getSize()
+        const usedSize = usedSizeWithHeader - spanType.getSize();
         let degree = allocUtils.convertSizeToDegree(usedSize - 1) + 1;
         let emptySpan: StoragePointer<EmptySpan> = null;
         // TODO: Make this more efficient by storing a list of bitfields.

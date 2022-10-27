@@ -1,8 +1,5 @@
 
 import { Selector, Value, Index } from "./types.js";
-import { DataType, TreeItem, NodeChildKey, TreeNodeMetrics } from "./internalTypes.js";
-import { StoragePointer, createNullPointer } from "./storagePointer.js";
-import { storageHeaderType, spanType, EmptySpan, emptySpanType } from "./builtTypes.js";
 import { Storage, FileStorage } from "./storage.js";
 import { StorageAccessor } from "./storageAccessor.js";
 import { HeapAllocator } from "./heapAllocator.js";

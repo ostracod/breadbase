@@ -1,9 +1,9 @@
 
 import { TailStruct } from "../src/internalTypes.js";
-import { boolType, IntType, TailStructType } from "../src/dataType.js"
+import { boolType, IntType, TailStructType } from "../src/dataType.js";
 import { StoragePointer } from "../src/storagePointer.js";
-import { MemoryStorage } from "../src/storage.js"
-import { StorageAccessor } from "../src/storageAccessor.js"
+import { MemoryStorage } from "../src/storage.js";
+import { StorageAccessor } from "../src/storageAccessor.js";
 
 describe("StorageAccessor", () => {
     describe("readTailStruct", () => {

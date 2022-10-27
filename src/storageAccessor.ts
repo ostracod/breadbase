@@ -49,7 +49,7 @@ export class StorageAccessor {
     
     async writeStructFields<T extends Struct>(
         pointer: StoragePointer<T>,
-        values: Partial<T>
+        values: Partial<T>,
     ): Promise<void> {
         for (const key in values) {
             await this.writeStructField(pointer, key, values[key]);

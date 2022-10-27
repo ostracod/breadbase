@@ -288,7 +288,7 @@ export class TreeManager extends StorageAccessor {
         nextNode: StoragePointer<TreeNode>,
         direction: TreeDirection,
     ): Promise<void> {
-        const oppositeDirection = allocUtils.getOppositeDirection(direction)
+        const oppositeDirection = allocUtils.getOppositeDirection(direction);
         const oppositeChildKey = allocUtils.getChildKey(oppositeDirection);
         const previousChild = await this.readStructField(nextNode, oppositeChildKey);
         if (previousChild.isNull()) {
