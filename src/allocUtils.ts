@@ -60,4 +60,12 @@ export const getOppositeChildKey = (direction: TreeDirection): NodeChildKey => (
     getChildKey(getOppositeDirection(direction))
 );
 
+export const getChildKeys = (direction: TreeDirection): {
+    childKey: NodeChildKey,
+    oppositeChildKey: NodeChildKey,
+} => ({
+    childKey: getChildKey(direction),
+    oppositeChildKey: getOppositeChildKey(direction),
+});
+
 
