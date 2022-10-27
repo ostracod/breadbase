@@ -375,7 +375,7 @@ export class TreeManager extends StorageAccessor {
             const depthDelta = await this.getNodeDepthDelta(node, direction);
             if (depthDelta > 1) {
                 await this.balanceTreeNode(node, direction);
-            } else if (depthDelta < 1) {
+            } else if (depthDelta < -1) {
                 const oppositeDirection = allocUtils.getOppositeDirection(direction);
                 await this.balanceTreeNode(node, oppositeDirection);
             }
