@@ -1,7 +1,7 @@
 
 import { Struct, TailStruct } from "./internalTypes.js";
 import { TailStructType } from "./dataType.js";
-import { StoragePointer, getStructFieldPointer } from "./storagePointer.js";
+import { StoragePointer, getStructFieldPointer, getTailElementPointer } from "./storagePointer.js";
 import { Storage } from "./storage.js";
 
 export class StorageAccessor {
@@ -54,6 +54,21 @@ export class StorageAccessor {
         for (const key in values) {
             await this.writeStructField(pointer, key, values[key]);
         }
+    }
+    
+    async readTailElement<T>(
+        pointer: StoragePointer<TailStruct<T>>,
+        index: number,
+    ): Promise<T> {
+        return await this.read(getTailElementPointer(pointer, index));
+    }
+    
+    async writeTailElement<T>(
+        pointer: StoragePointer<TailStruct<T>>,
+        index: number,
+        value: T,
+    ): Promise<void> {
+        await this.write(getTailElementPointer(pointer, index), value);
     }
 }
 

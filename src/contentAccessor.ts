@@ -3,43 +3,81 @@ import { TailStruct } from "./internalTypes.js";
 import { TailStructType } from "./dataType.js";
 import { TreeContent, stringAsciiCharsType } from "./builtTypes.js";
 import { AllocType } from "./constants.js";
-import { Storage } from "./storage.js";
-import { StoragePointer, getStructFieldPointer, getTailElementPointer } from "./storagePointer.js";
+import { StoragePointer } from "./storagePointer.js";
 import { StorageAccessor } from "./storageAccessor.js";
+import { HeapAllocator } from "./heapAllocator.js";
+import { TreeManager } from "./treeManager.js";
 
 export const contentTypeMap: Map<AllocType, TailStructType<TreeContent & TailStruct>> = new Map([
     [AllocType.StringAsciiChars, stringAsciiCharsType],
 ]);
 
 export class ContentAccessor extends StorageAccessor {
+    heapAllocator: HeapAllocator;
+    manager: TreeManager;
     content: StoragePointer<TreeContent & TailStruct>;
     tailStructType: TailStructType;
-    itemCount: number;
-    bufferLength: number;
+    fieldValues: Partial<TreeContent>;
+    items: any[];
     
-    async init(storage: Storage, content: StoragePointer<TreeContent>): Promise<void> {
-        this.setStorage(storage);
-        const allocType = await this.readStructField(content, "type");
+    async init(manager: TreeManager, content: StoragePointer<TreeContent>): Promise<void> {
+        this.heapAllocator = this.manager.heapAllocator;
+        this.manager = manager;
+        this.setStorage(this.manager.storage);
+        this.fieldValues = {};
+        const allocType = await this.getField("type");
         const tailStructType = contentTypeMap.get(allocType);
         this.content = content.convert(tailStructType);
-        this.itemCount = null;
     }
     
-    async readContentField<T extends string & (keyof TreeContent)>(
+    async getField<T extends string & (keyof TreeContent)>(
         name: T,
     ): Promise<TreeContent[T]> {
-        return this.read(getStructFieldPointer(this.content, name));
-    }
-    
-    async getItemCount(): Promise<number> {
-        if (this.itemCount === null) {
-            this.itemCount = await this.readContentField("itemCount");
+        let value = this.fieldValues[name];
+        if (typeof value === "undefined") {
+            value = await this.readStructField(this.content, name);
+            this.fieldValues[name] = value;
         }
-        return this.itemCount;
+        return value as TreeContent[T];
     }
     
-    async readItem(index: number): Promise<any> {
-        return await this.read(getTailElementPointer(this.content, index));
+    getElementSize(): number {
+        return this.tailStructType.elementType.getSize();
+    }
+    
+    async getItem(index: number): Promise<any> {
+        let item = this.items[index];
+        if (typeof item === "undefined") {
+            item = await this.readTailElement(this.content, index);
+            this.items[index] = item;
+        }
+        return item;
+    }
+    
+    async getAllItems(): Promise<any[]> {
+        const output = [];
+        const itemCount = await this.getField("itemCount");
+        for (let index = 0; index < itemCount; index += 1) {
+            const item = await this.getItem(index);
+            output.push(item);
+        }
+        return output;
+    }
+    
+    async resizeBuffer(length: number): Promise<void> {
+        const parent = await this.getField("parent");
+        const allocType = await this.getField("type");
+        const items = await this.getAllItems();
+        const content = await this.manager.createTreeContent(
+            parent,
+            allocType,
+            length,
+            items,
+        );
+        await this.writeStructField(parent, "treeContent", content);
+        await this.heapAllocator.deleteAlloc(this.content);
+        this.content = content;
+        this.fieldValues.bufferLength = length;
     }
 }
 

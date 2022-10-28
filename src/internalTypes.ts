@@ -1,6 +1,5 @@
 
-import { TreeContent } from "./builtTypes.js";
-import { StoragePointer } from "./storagePointer.js";
+import { ContentAccessor } from "./contentAccessor.js";
 
 export interface DataType<T = any> {
     getSize(): number;
@@ -28,8 +27,8 @@ export interface ResolvedField<T = any> extends Field<T> {
 }
 
 export interface TreeItem {
-    content: StoragePointer<TreeContent>;
-    // Number of items after `startIndex` in `content`.
+    accessor: ContentAccessor;
+    // Number of items after `startIndex` in tree content.
     index: number;
 }
 
