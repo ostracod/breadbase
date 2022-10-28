@@ -45,6 +45,10 @@ class TreeTester extends StorageAccessor {
         );
     }
     
+    async deleteNode(nodeIndex: number): Promise<void> {
+        await this.manager.deleteTreeNode(this.nodes[nodeIndex]);
+    }
+    
     async assertRootChild(childIndex: number): Promise<void> {
         const child = (childIndex === null) ? nullNodePointer : this.nodes[childIndex];
         expect(
@@ -136,6 +140,61 @@ describe("TreeManager", () => {
             await tester.assertNodeChildren(0, null, null);
             await tester.assertNodeChildren(2, 0, 1);
             await tester.assertNodeChildren(1, null, null);
+        });
+    });
+    
+    describe("deleteTreeNode", () => {
+        it("deletes node which has no children", async () => {
+            const tester = new TreeTester();
+            await tester.init(2);
+            await tester.insertNode(1, 0, TreeDirection.Forward);
+            await tester.deleteNode(1);
+            await tester.assertRootChild(0);
+            await tester.assertNodeChildren(0, null, null);
+        });
+        
+        it("substitutes left child", async () => {
+            const tester = new TreeTester();
+            await tester.init(2);
+            await tester.insertNode(1, 0, TreeDirection.Forward);
+            await tester.deleteNode(0);
+            await tester.assertRootChild(1);
+            await tester.assertNodeChildren(1, null, null);
+        });
+        
+        it("substitutes right child", async () => {
+            const tester = new TreeTester();
+            await tester.init(2);
+            await tester.insertNode(1, 0, TreeDirection.Backward);
+            await tester.deleteNode(0);
+            await tester.assertRootChild(1);
+            await tester.assertNodeChildren(1, null, null);
+        });
+        
+        it("substitutes left child of right child", async () => {
+            const tester = new TreeTester();
+            await tester.init(4);
+            await tester.insertNode(1, 0, TreeDirection.Forward);
+            await tester.insertNode(2, 0, TreeDirection.Backward);
+            await tester.insertNode(3, 2, TreeDirection.Forward);
+            await tester.deleteNode(0);
+            await tester.assertRootChild(3);
+            await tester.assertNodeChildren(3, 1, 2);
+            await tester.assertNodeChildren(1, null, null);
+            await tester.assertNodeChildren(2, null, null);
+        });
+        
+        it("triggers node rotation", async () => {
+            const tester = new TreeTester();
+            await tester.init(4);
+            await tester.insertNode(1, 0, TreeDirection.Forward);
+            await tester.insertNode(2, 0, TreeDirection.Backward);
+            await tester.insertNode(3, 1, TreeDirection.Forward);
+            await tester.deleteNode(0);
+            await tester.assertRootChild(1);
+            await tester.assertNodeChildren(1, 3, 2);
+            await tester.assertNodeChildren(2, null, null);
+            await tester.assertNodeChildren(3, null, null);
         });
     });
 });
