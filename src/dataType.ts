@@ -3,6 +3,23 @@ import { DataType, Struct, TailStruct, TailStructElement, Field, ResolvedField }
 import { storagePointerSize } from "./constants.js";
 import { StoragePointer } from "./storagePointer.js";
 
+export class AnyType implements DataType<any> {
+    
+    getSize(): number {
+        throw new Error("Cannot get size of AnyType.");
+    }
+    
+    read(data: Buffer, offset: number): boolean {
+        throw new Error("Cannot read AnyType.");
+    }
+    
+    write(data: Buffer, offset: number, value: boolean): void {
+        throw new Error("Cannot write AnyType.");
+    }
+}
+
+export const anyType = new AnyType();
+
 export class BoolType implements DataType<boolean> {
     
     getSize(): number {

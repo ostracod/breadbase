@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 
 const directoryPath = pathUtils.dirname(fileURLToPath(import.meta.url));
 const typesPath = pathUtils.join(directoryPath, "types.json");
-const namedTypesData = JSON.parse(fs.readFileSync(typesPath, "utf8"));
+const typeDeclarationsData = JSON.parse(fs.readFileSync(typesPath, "utf8"));
 
 const pointerTypeNames = new Set();
 
@@ -15,33 +15,83 @@ const getTypeInstanceName = (typeName) => uncapitalize(typeName) + "Type";
 
 const getPointerInstanceName = (typeName) => uncapitalize(typeName);
 
+const getParamTypesCode = (paramTypes) => {
+    if (paramTypes.length > 0) {
+        return `<${paramTypes.map((type) => type.getNestedCode() + " = any").join(", ")}>`;
+    } else {
+        return "";
+    }
+};
+
 class DataType {
     // Concrete subclasses of DataType must implement these methods:
-    // getNestedCode, getInstanceCode
+    // getNestedCode, getInstanceCode, replaceParamTypes
     
-    constructor(data) {
-        // Do nothing.
-    }
-    
-    getDeclarationCode(name, instanceName) {
-        return `export type ${name} = ${this.getNestedCode()}\n\nexport const ${instanceName} = ${this.getInstanceCode()}\n`;
+    getDeclarationCode(name, paramTypes) {
+        return `export type ${name}${getParamTypesCode(paramTypes)} = ${this.getNestedCode()}\n\nexport const ${getTypeInstanceName(name)} = ${this.getInstanceCode()}\n`;
     }
     
     getPointerInstanceCode() {
         return `new StoragePointerType(${this.getInstanceCode()})`;
     }
+    
+    dereference() {
+        return this;
+    }
 }
 
-class ReferenceType extends DataType {
+class ParamType extends DataType {
     
-    constructor(data) {
-        super(data);
-        this.name = data;
-        this.instanceName = getTypeInstanceName(this.name);
+    constructor(name) {
+        super();
+        this.name = name;
     }
     
     getNestedCode() {
         return this.name;
+    }
+    
+    getInstanceCode() {
+        return anyType.getInstanceCode();
+    }
+    
+    dereference() {
+        return anyType;
+    }
+    
+    replaceParamTypes(paramReplacementMap) {
+        const replacement = paramReplacementMap.get(this.name);
+        return (typeof replacement === "undefined") ? this : replacement;
+    }
+}
+
+class ReferenceType extends DataType {
+    
+    init(name, paramReplacements) {
+        this.name = name;
+        this.instanceName = getTypeInstanceName(this.name);
+        this.paramReplacements = paramReplacements;
+    }
+    
+    initWithData(scope, data) {
+        const paramReplacementsData = data.paramTypes;
+        let paramReplacements;
+        if (typeof paramReplacementsData === "undefined") {
+            paramReplacements = [];
+        } else {
+            paramReplacements = paramReplacementsData.map((typeData) => (
+                convertDataToType(scope, typeData)
+            ));
+        }
+        this.init(data.name, paramReplacements);
+    }
+    
+    getNestedCode() {
+        if (this.paramReplacements.length > 0) {
+            return `${this.name}<${this.paramReplacements.map((type) => type.getNestedCode()).join(", ")}>`;
+        } else {
+            return this.name;
+        }
     }
     
     getInstanceCode() {
@@ -52,9 +102,56 @@ class ReferenceType extends DataType {
         pointerTypeNames.add(this.name);
         return "pointerTypes." + getPointerInstanceName(this.name);
     }
+    
+    dereference() {
+        const declaration = typeDeclarationMap.get(this.name);
+        let { type } = declaration;
+        if (this.paramReplacements.length > 0) {
+            const paramReplacementMap = new Map();
+            this.paramReplacements.forEach((paramReplacement, index) => {
+                const name = declaration.paramTypes[index].name;
+                paramReplacementMap.set(name, paramReplacement);
+            });
+            type = type.replaceParamTypes(paramReplacementMap);
+        }
+        return type.dereference();
+    }
+    
+    replaceParamTypes(paramReplacementMap) {
+        const replacements = this.paramReplacements.map((replacement) => (
+            replacement.replaceParamTypes(paramReplacementMap)
+        ));
+        const output = new ReferenceType();
+        output.init(this.name, replacements);
+        return output;
+    }
 }
 
-class BoolType extends DataType {
+class LiteralType extends DataType {
+    
+    initWithData(scope, data) {
+        // Do nothing.
+    }
+    
+    replaceParamTypes(paramReplacementMap) {
+        return this;
+    }
+}
+
+class AnyType extends LiteralType {
+    
+    getNestedCode() {
+        return "any";
+    }
+    
+    getInstanceCode() {
+        return "anyType";
+    }
+}
+
+const anyType = new AnyType(new Map(), null);
+
+class BoolType extends LiteralType {
     
     getNestedCode() {
         return "boolean";
@@ -65,13 +162,17 @@ class BoolType extends DataType {
     }
 }
 
-class IntType extends DataType {
+class IntType extends LiteralType {
     
-    constructor(data) {
-        super(data);
-        this.size = data.size;
+    init(size, enumType = null) {
+        this.size = size;
+        this.enumType = enumType;
+    }
+    
+    initWithData(scope, data) {
+        super.initWithData(scope, data);
         const { enumType } = data;
-        this.enumType = (typeof enumType === "undefined") ? null : enumType;
+        this.init(data.size, (typeof enumType === "undefined") ? null : enumType);
     }
     
     getNestedCode() {
@@ -83,12 +184,17 @@ class IntType extends DataType {
     }
 }
 
-class ArrayType extends DataType {
+class ArrayType extends LiteralType {
     
-    constructor(data) {
-        super(data);
-        this.elementType = convertDataToType(data.elementType);
-        this.length = data.length;
+    init(elementType, length) {
+        this.elementType = elementType;
+        this.length = length;
+    }
+    
+    initWithData(scope, data) {
+        super.initWithData(scope, data);
+        const elementType = convertDataToType(scope, data.elementType);
+        this.init(elementType, data.length);
     }
     
     getNestedCode() {
@@ -98,13 +204,25 @@ class ArrayType extends DataType {
     getInstanceCode() {
         return `new ArrayType(${this.elementType.getInstanceCode()}, ${this.length})`;
     }
+    
+    replaceParamTypes(paramReplacementMap) {
+        const elementType = this.elementType.replaceParamTypes(paramReplacementMap);
+        const output = new ArrayType();
+        output.init(elementType, this.length);
+        return output;
+    }
 }
 
-class StoragePointerType extends DataType {
+class StoragePointerType extends LiteralType {
     
-    constructor(data) {
-        super(data);
-        this.elementType = convertDataToType(data.elementType);
+    init(elementType) {
+        this.elementType = elementType;
+    }
+    
+    initWithData(scope, data) {
+        super.initWithData(scope, data);
+        const elementType = convertDataToType(scope, data.elementType);
+        this.init(elementType);
     }
     
     getNestedCode() {
@@ -114,9 +232,16 @@ class StoragePointerType extends DataType {
     getInstanceCode() {
         return this.elementType.getPointerInstanceCode();
     }
+    
+    replaceParamTypes(paramReplacementMap) {
+        const elementType = this.elementType.replaceParamTypes(paramReplacementMap);
+        const output = new StoragePointerType();
+        output.init(elementType);
+        return output;
+    }
 }
 
-class Field {
+class MemberField {
     
     constructor(name, type) {
         this.name = name;
@@ -129,6 +254,11 @@ class Field {
     
     getInstanceCode() {
         return `{ name: "${this.name}", type: ${this.type.getInstanceCode()} }`;
+    }
+    
+    replaceParamTypes(paramReplacementMap) {
+        const type = this.type.replaceParamTypes(paramReplacementMap);
+        return new MemberField(this.name, type);
     }
 }
 
@@ -151,28 +281,46 @@ class TailField {
     }
 }
 
-class StructType extends DataType {
+class StructType extends LiteralType {
     
-    constructor(data) {
-        super(data);
-        this.allFields = [];
-        this.subTypeFields = [];
-        const superTypeName = data.superType;
-        if (typeof superTypeName === "undefined") {
-            this.superTypeName = null;
-            this.allFields.push(new FlavorField());
-        } else {
-            this.superTypeName = superTypeName;
-            const superType = typeMap.get(this.superTypeName);
-            superType.allFields.forEach((field) => {
-                this.allFields.push(field);
+    initStruct(fields, superType = null) {
+        this.subTypeFields = fields;
+        this.memberFields = [];
+        this.allFields = [new FlavorField()];
+        this.superType = superType;
+        if (this.superType !== null) {
+            const structType = this.superType.dereference();
+            structType.memberFields.forEach((field) => {
+                this.addMemberField(field);
             });
         }
-        data.fields.forEach((data) => {
-            const field = new Field(data.name, convertDataToType(data.type));
-            this.allFields.push(field);
-            this.subTypeFields.push(field);
+        this.subTypeFields.forEach((field) => {
+            this.addMemberField(field);
         });
+    }
+    
+    init(fields, superType = null) {
+        this.initStruct(fields, superType);
+    }
+    
+    initWithData(scope, data) {
+        super.initWithData(scope, data);
+        const superTypeData = data.superType;
+        let superType;
+        if (typeof superTypeData === "undefined") {
+            superType = null;
+        } else {
+            superType = convertDataToType(scope, superTypeData);
+        }
+        const fields = data.fields.map((fieldData) => (
+            new MemberField(fieldData.name, convertDataToType(scope, fieldData.type))
+        ));
+        this.initStruct(fields, superType);
+    }
+    
+    addMemberField(field) {
+        this.memberFields.push(field);
+        this.allFields.push(field);
     }
     
     getInterfaceName() {
@@ -184,24 +332,24 @@ class StructType extends DataType {
     }
     
     getConstructorArgs() {
-        if (this.superTypeName === null) {
+        if (this.superType === null) {
             return [];
         } else {
-            return [getTypeInstanceName(this.superTypeName)];
+            return [this.superType.getInstanceCode()];
         }
     }
     
-    getDeclarationCode(name, instanceName) {
+    getDeclarationCode(name, paramTypes) {
         const resultText = [];
         let extensionText = this.getInterfaceName();
-        if (this.superTypeName !== null) {
-            extensionText += ", " + this.superTypeName;
+        if (this.superType !== null) {
+            extensionText += ", " + this.superType.getNestedCode();
         }
-        resultText.push(`export interface ${name} extends ${extensionText} {`);
+        resultText.push(`export interface ${name}${getParamTypesCode(paramTypes)} extends ${extensionText} {`);
         for (const field of this.subTypeFields) {
             resultText.push(`    ${field.getNestedCode()};`);
         }
-        resultText.push(`}\n\nexport const ${instanceName} = new ${this.getClassName()}<${name}>([`);
+        resultText.push(`}\n\nexport const ${getTypeInstanceName(name)} = new ${this.getClassName()}<${name}>([`);
         for (const field of this.subTypeFields) {
             resultText.push(`    ${field.getInstanceCode()},`);
         }
@@ -222,14 +370,54 @@ class StructType extends DataType {
         resultText.push(`${terms.join(", ")})`);
         return resultText.join("");
     }
+    
+    replaceParamsHelper(paramReplacementMap, structType) {
+        const fields = this.subTypeFields.map((field) => (
+            field.replaceParamTypes(paramReplacementMap)
+        ));
+        let superType;
+        if (this.superType === null) {
+            superType = null;
+        } else {
+            superType = this.superType.replaceParamTypes(paramReplacementMap);
+        }
+        structType.initStruct(fields, superType);
+    }
+    
+    replaceParamTypes(paramReplacementMap) {
+        const output = new StructType();
+        this.replaceParamsHelper(paramReplacementMap, output);
+        return output;
+    }
 }
 
 class TailStructType extends StructType {
     
-    constructor(data) {
-        super(data);
-        this.elementType = convertDataToType(data.elementType);
+    initElementType(elementType = null) {
+        this.initElementType = elementType;
+        if (this.initElementType === null) {
+            this.elementType = this.superType.dereference().elementType;
+        } else {
+            this.elementType = this.initElementType;
+        }
         this.allFields.push(new TailField(this.elementType));
+    }
+    
+    init(fields, superType = null, elementType = null) {
+        this.initStruct(fields, superType);
+        this.initElementType(elementType);
+    }
+    
+    initWithData(scope, data) {
+        super.initWithData(scope, data);
+        const elementTypeData = data.elementType;
+        let elementType;
+        if (typeof elementTypeData === "undefined") {
+            elementType = null;
+        } else {
+            elementType = convertDataToType(scope, data.elementType);
+        }
+        this.initElementType(elementType);
     }
     
     getInterfaceName() {
@@ -241,36 +429,81 @@ class TailStructType extends StructType {
     }
     
     getConstructorArgs() {
-        return [this.elementType.getInstanceCode(), ...super.getConstructorArgs()]
+        return [this.elementType.getInstanceCode(), ...super.getConstructorArgs()];
+    }
+    
+    replaceParamTypes(paramReplacementMap) {
+        let elementType;
+        if (this.initElementType === null) {
+            elementType = null;
+        } else {
+            elementType = this.initElementType.replaceParamTypes(paramReplacementMap);
+        }
+        const output = new TailStructType();
+        this.replaceParamsHelper(paramReplacementMap, output);
+        output.initElementType(elementType);
+        return output;
     }
 }
 
-const classTypeMap = { BoolType, IntType, ArrayType, StoragePointerType, StructType, TailStructType };
+const literalTypeMap = { AnyType, BoolType, IntType, ArrayType, StoragePointerType, StructType, TailStructType };
 
-const convertDataToType = (data) => {
+class TypeDeclaration {
+    
+    constructor(data) {
+        this.name = data.name;
+        let paramTypes;
+        const paramTypeNames = data.paramTypes;
+        if (typeof paramTypeNames === "undefined") {
+            this.paramTypes = [];
+        } else {
+            this.paramTypes = paramTypeNames.map((name) => new ParamType(name));
+        }
+        const scope = new Map();
+        this.paramTypes.forEach((paramType) => {
+            scope.set(paramType.name, paramType);
+        });
+        this.type = convertDataToType(scope, data.type);
+    }
+    
+    getCode() {
+        return this.type.getDeclarationCode(this.name, this.paramTypes);
+    }
+}
+
+// `scope` is a Map from name to DataType.
+const convertDataToType = (scope, inputData) => {
+    const data = (typeof inputData === "string") ? { name: inputData } : inputData;
     let typeConstructor;
-    if (typeof data === "string") {
-        typeConstructor = ReferenceType;
-    } else {
+    if ("class" in data) {
         const className = data.class;
-        typeConstructor = classTypeMap[className];
+        typeConstructor = literalTypeMap[className];
         if (typeof typeConstructor === "undefined") {
             throw new Error(`Unknown type class "${className}".`);
         }
+    } else if ("name" in data) {
+        const { name } = data;
+        const type = scope.get(name);
+        if (typeof type !== "undefined") {
+            return type;
+        }
+        typeConstructor = ReferenceType;
+    } else {
+        throw new Error(`Invalid type data ${JSON.stringify(inputData)}.`);
     }
-    return new typeConstructor(data);
+    const output = new typeConstructor();
+    output.initWithData(scope, data);
+    return output;
 };
 
-const resultText = ["\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount, AllocType } from \"./constants.js\";\nimport { boolType, IntType, StoragePointerType, ArrayType, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
+const resultText = ["\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount, AllocType } from \"./constants.js\";\nimport { anyType, boolType, IntType, StoragePointerType, ArrayType, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
 
-const typeMap = new Map();
+const typeDeclarationMap = new Map();
 const declarationsText = [];
-for (const namedTypeData of namedTypesData) {
-    const { name } = namedTypeData;
-    const instanceName = getTypeInstanceName(name);
-    const type = convertDataToType(namedTypeData.type);
-    typeMap.set(name, type);
-    declarationsText.push(type.getDeclarationCode(name, instanceName));
+for (const data of typeDeclarationsData) {
+    const declaration = new TypeDeclaration(data);
+    typeDeclarationMap.set(declaration.name, declaration);
+    declarationsText.push(declaration.getCode());
 }
 
 resultText.push("const pointerTypes = {");

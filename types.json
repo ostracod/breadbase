@@ -69,17 +69,20 @@
             } }
         ]
     } },
-    { "name": "TreeRoot", "type": {
+    { "name": "TreeRoot", "paramTypes": ["T"], "type": {
         "class": "StructType",
         "superType": "Alloc",
         "fields": [
             { "name": "child", "type": {
                 "class": "StoragePointerType",
-                "elementType": "TreeNode"
+                "elementType": {
+                    "name": "TreeNode",
+                    "paramTypes": ["T"]
+                }
             } }
         ]
     } },
-    { "name": "TreeNode", "type": {
+    { "name": "TreeNode", "paramTypes": ["T"], "type": {
         "class": "StructType",
         "superType": "Alloc",
         "fields": [
@@ -89,11 +92,17 @@
             } },
             { "name": "leftChild", "type": {
                 "class": "StoragePointerType",
-                "elementType": "TreeNode"
+                "elementType": {
+                    "name": "TreeNode",
+                    "paramTypes": ["T"]
+                }
             } },
             { "name": "rightChild", "type": {
                 "class": "StoragePointerType",
-                "elementType": "TreeNode"
+                "elementType": {
+                    "name": "TreeNode",
+                    "paramTypes": ["T"]
+                }
             } },
             { "name": "maximumDepth", "type": {
                 "class": "IntType",
@@ -105,17 +114,23 @@
             } },
             { "name": "treeContent", "type": {
                 "class": "StoragePointerType",
-                "elementType": "TreeContent"
+                "elementType": {
+                    "name": "TreeContent",
+                    "paramTypes": ["T"]
+                }
             } }
         ]
     } },
-    { "name": "TreeContent", "type": {
-        "class": "StructType",
+    { "name": "TreeContent", "paramTypes": ["T"], "type": {
+        "class": "TailStructType",
         "superType": "Alloc",
         "fields": [
             { "name": "parent", "type": {
                 "class": "StoragePointerType",
-                "elementType": "TreeNode"
+                "elementType": {
+                    "name": "TreeNode",
+                    "paramTypes": ["T"]
+                }
             } },
             { "name": "bufferLength", "type": {
                 "class": "IntType",
@@ -125,15 +140,20 @@
                 "class": "IntType",
                 "size": 4
             } }
-        ]
+        ],
+        "elementType": "T"
     } },
     { "name": "StringAsciiChars", "type": {
         "class": "TailStructType",
-        "superType": "TreeContent",
-        "fields": [],
-        "elementType": {
-            "class": "IntType",
-            "size": 1
-        }
+        "superType": {
+            "name": "TreeContent",
+            "paramTypes": [
+                {
+                    "class": "IntType",
+                    "size": 1
+                }
+            ]
+        },
+        "fields": []
     } }
 ]
