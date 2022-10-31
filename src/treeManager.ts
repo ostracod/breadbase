@@ -1,9 +1,10 @@
 
-import { TailStruct, TreeItem, NodeChildKey, TreeNodeMetrics } from "./internalTypes.js";
+import { TreeItem, NodeChildKey, TreeNodeMetrics } from "./internalTypes.js";
 import { AllocType, TreeDirection, defaultContentSize } from "./constants.js";
 import * as allocUtils from "./allocUtils.js";
-import { StoragePointer, createNullPointer } from "./storagePointer.js";
+import { TailStructType } from "./dataType.js";
 import { Alloc, allocType, TreeRoot, treeRootType, TreeNode, treeNodeType, TreeContent } from "./builtTypes.js";
+import { StoragePointer, createNullPointer } from "./storagePointer.js";
 import { Storage } from "./storage.js";
 import { StorageAccessor } from "./storageAccessor.js";
 import { HeapAllocator } from "./heapAllocator.js";
@@ -20,10 +21,10 @@ export class TreeManager extends StorageAccessor {
         this.heapAllocator = heapAllocator;
     }
     
-    async findTreeItemByIndex(
-        root: StoragePointer<TreeRoot>,
+    async findTreeItemByIndex<T>(
+        root: StoragePointer<TreeRoot<T>>,
         index: number,
-    ): Promise<TreeItem> {
+    ): Promise<TreeItem<T>> {
         let startIndex = 0;
         let node = await this.readStructField(root, "child");
         while (true) {
@@ -37,7 +38,7 @@ export class TreeManager extends StorageAccessor {
             if (index >= leftIndex) {
                 const rightIndex = leftIndex + itemCount;
                 if (index < rightIndex) {
-                    const accessor = new ContentAccessor();
+                    const accessor = new ContentAccessor<T>();
                     await accessor.init(this, content);
                     return { accessor, index: index - leftIndex };
                 } else {
@@ -50,13 +51,13 @@ export class TreeManager extends StorageAccessor {
         }
     }
     
-    async iterateTreeContent(
-        node: StoragePointer<TreeNode>,
+    async iterateTreeContent<T>(
+        node: StoragePointer<TreeNode<T>>,
         direction: TreeDirection,
-        handle: (value: any) => Promise<boolean>,
+        handle: (value: T) => Promise<boolean>,
     ): Promise<boolean> {
         const content = await this.readStructField(node, "treeContent");
-        const accessor = new ContentAccessor();
+        const accessor = new ContentAccessor<T>();
         await accessor.init(this, content);
         const itemCount = await accessor.getField("itemCount");
         let startIndex: number;
@@ -78,10 +79,10 @@ export class TreeManager extends StorageAccessor {
         return false;
     }
     
-    async iterateTreeHelper(
-        node: StoragePointer<TreeNode>,
+    async iterateTreeHelper<T>(
+        node: StoragePointer<TreeNode<T>>,
         direction: TreeDirection,
-        handle: (value: any) => Promise<boolean>,
+        handle: (value: T) => Promise<boolean>,
     ): Promise<boolean> {
         const previousChild = await this.readStructField(
             node,
@@ -108,28 +109,28 @@ export class TreeManager extends StorageAccessor {
         }
     }
     
-    async iterateTreeForward(
-        root: StoragePointer<TreeRoot>,
+    async iterateTreeForward<T>(
+        root: StoragePointer<TreeRoot<T>>,
         // When return value is true, iteration will stop early.
-        handle: (value: any) => Promise<boolean>,
+        handle: (value: T) => Promise<boolean>,
     ): Promise<void> {
         const node = await this.readStructField(root, "child");
         await this.iterateTreeHelper(node, TreeDirection.Forward, handle);
     }
     
-    async iterateTreeBackward(
-        root: StoragePointer<TreeRoot>,
+    async iterateTreeBackward<T>(
+        root: StoragePointer<TreeRoot<T>>,
         // When return value is true, iteration will stop early.
-        handle: (value: any) => Promise<boolean>,
+        handle: (value: T) => Promise<boolean>,
     ): Promise<void> {
         const node = await this.readStructField(root, "child");
         await this.iterateTreeHelper(node, TreeDirection.Backward, handle);
     }
     
-    async getFarthestChild(
-        node: StoragePointer<TreeNode>,
+    async getFarthestChild<T>(
+        node: StoragePointer<TreeNode<T>>,
         direction: TreeDirection,
-    ): Promise<StoragePointer<TreeNode>> {
+    ): Promise<StoragePointer<TreeNode<T>>> {
         const childKey = allocUtils.getChildKey(direction);
         let output = node;
         while (true) {
@@ -142,10 +143,10 @@ export class TreeManager extends StorageAccessor {
         return output;
     }
     
-    async getNeighborTreeNode(
-        node: StoragePointer<TreeNode>,
+    async getNeighborTreeNode<T>(
+        node: StoragePointer<TreeNode<T>>,
         direction: TreeDirection,
-    ): Promise<StoragePointer<TreeNode>> {
+    ): Promise<StoragePointer<TreeNode<T>>> {
         const { childKey, oppositeChildKey } = allocUtils.getChildKeys(direction);
         const nextChild = await this.readStructField(node, childKey);
         if (nextChild.isNull()) {
@@ -172,29 +173,31 @@ export class TreeManager extends StorageAccessor {
         }
     }
     
-    async getNextTreeNode(node: StoragePointer<TreeNode>): Promise<StoragePointer<TreeNode>> {
+    async getNextTreeNode<T>(
+        node: StoragePointer<TreeNode<T>>,
+    ): Promise<StoragePointer<TreeNode<T>>> {
         return this.getNeighborTreeNode(node, TreeDirection.Forward);
     }
     
-    async getPreviousTreeNode(
-        node: StoragePointer<TreeNode>,
-    ): Promise<StoragePointer<TreeNode>> {
+    async getPreviousTreeNode<T>(
+        node: StoragePointer<TreeNode<T>>,
+    ): Promise<StoragePointer<TreeNode<T>>> {
         return this.getNeighborTreeNode(node, TreeDirection.Backward);
     }
     
     // Returns the first item for which `compare` returns 0 or 1.
-    async findTreeItemByComparison(
+    async findTreeItemByComparison<T>(
         // Must be sorted by `compare`.
-        root: StoragePointer<TreeRoot>,
+        root: StoragePointer<TreeRoot<T>>,
         // `compare` returns 0 if `value` has match, 1 if `value`
         // is too late, and -1 if `value` is too early.
-        compare: (value: any) => Promise<number>,
-    ): Promise<TreeItem> {
+        compare: (value: T) => Promise<number>,
+    ): Promise<TreeItem<T>> {
         let node = await this.readStructField(root, "child");
-        let startNode: StoragePointer<TreeNode> = null;
+        let startNode: StoragePointer<TreeNode<T>> = null;
         while (!node.isNull()) {
             const content = await this.readStructField(node, "treeContent");
-            const accessor = new ContentAccessor();
+            const accessor = new ContentAccessor<T>();
             await accessor.init(this, content);
             const value = await accessor.getItem(0);
             if (await compare(value) < 0) {
@@ -207,7 +210,7 @@ export class TreeManager extends StorageAccessor {
         node = startNode;
         while (true) {
             const content = await this.readStructField(node, "treeContent");
-            const accessor = new ContentAccessor();
+            const accessor = new ContentAccessor<T>();
             await accessor.init(this, content);
             const itemCount = await accessor.getField("itemCount");
             // TODO: Use binary search.
@@ -222,13 +225,13 @@ export class TreeManager extends StorageAccessor {
         return null;
     }
     
-    async createTreeContent(
-        parent: StoragePointer<TreeNode>,
+    async createTreeContent<T>(
+        parent: StoragePointer<TreeNode<T>>,
         contentAllocType: AllocType,
         bufferLength: number,
-        values: any[],
-    ): Promise<StoragePointer<TreeContent & TailStruct>> {
-        const contentType = contentTypeMap.get(contentAllocType);
+        values: T[],
+    ): Promise<StoragePointer<TreeContent<T>>> {
+        const contentType = contentTypeMap.get(contentAllocType) as TailStructType<TreeContent<T>>;
         const output = (await this.heapAllocator.createAlloc(
             contentAllocType,
             contentType.getSizeWithTail(bufferLength) - allocType.getSize(),
@@ -244,11 +247,11 @@ export class TreeManager extends StorageAccessor {
         return output;
     }
     
-    async createTreeNode(
+    async createTreeNode<T>(
         contentAllocType: AllocType,
         bufferLength: number,
-        values: any[],
-    ): Promise<StoragePointer<TreeNode>> {
+        values: T[],
+    ): Promise<StoragePointer<TreeNode<T>>> {
         const output = (await this.heapAllocator.createAlloc(
             AllocType.Node,
             treeNodeType.getSize() - allocType.getSize(),
@@ -292,9 +295,9 @@ export class TreeManager extends StorageAccessor {
         });
     }
     
-    async setTreeRootChild(
-        root: StoragePointer<TreeRoot>,
-        child: StoragePointer<TreeNode>,
+    async setTreeRootChild<T>(
+        root: StoragePointer<TreeRoot<T>>,
+        child: StoragePointer<TreeNode<T>>,
     ): Promise<void> {
         await this.writeStructField(root, "child", child);
         if (!child.isNull()) {
@@ -302,10 +305,10 @@ export class TreeManager extends StorageAccessor {
         }
     }
     
-    async setTreeNodeChild(
-        parent: StoragePointer<TreeNode>,
+    async setTreeNodeChild<T>(
+        parent: StoragePointer<TreeNode<T>>,
         childKey: NodeChildKey,
-        child: StoragePointer<TreeNode>,
+        child: StoragePointer<TreeNode<T>>,
     ): Promise<void> {
         await this.writeStructField(parent, childKey, child);
         if (!child.isNull()) {
@@ -333,10 +336,10 @@ export class TreeManager extends StorageAccessor {
         return nextDepth - previousDepth;
     }
     
-    async replaceNodeChild(
-        parent: StoragePointer<TreeNode>,
-        oldChild: StoragePointer<TreeNode>,
-        newChild: StoragePointer<TreeNode>,
+    async replaceNodeChild<T>(
+        parent: StoragePointer<TreeNode<T>>,
+        oldChild: StoragePointer<TreeNode<T>>,
+        newChild: StoragePointer<TreeNode<T>>,
     ): Promise<void> {
         let childKey: NodeChildKey = "leftChild";
         const child = await this.readStructField(parent, childKey);
@@ -346,10 +349,10 @@ export class TreeManager extends StorageAccessor {
         await this.setTreeNodeChild(parent, childKey, newChild);
     }
     
-    async replaceChild(
+    async replaceChild<T>(
         parent: StoragePointer<Alloc>,
-        oldChild: StoragePointer<TreeNode>,
-        newChild: StoragePointer<TreeNode>,
+        oldChild: StoragePointer<TreeNode<T>>,
+        newChild: StoragePointer<TreeNode<T>>,
     ): Promise<void> {
         const type = await this.readStructField(parent, "type");
         if (type === AllocType.Node) {
@@ -390,7 +393,9 @@ export class TreeManager extends StorageAccessor {
         await this.rotateTreeNode(node, direction);
     }
     
-    async getParentNode(node: StoragePointer<TreeNode>): Promise<StoragePointer<TreeNode>> {
+    async getParentNode<T>(
+        node: StoragePointer<TreeNode<T>>,
+    ): Promise<StoragePointer<TreeNode<T>>> {
         const parent = await this.readStructField(node, "parent");
         const type = await this.readStructField(parent, "type");
         return (type === AllocType.Node) ? parent.convert(treeNodeType) : null;
@@ -414,9 +419,9 @@ export class TreeManager extends StorageAccessor {
     }
     
     // `node` will be inserted before `nextNode` with respect to `direction`.
-    async insertTreeNode(
-        node: StoragePointer<TreeNode>,
-        nextNode: StoragePointer<TreeNode>,
+    async insertTreeNode<T>(
+        node: StoragePointer<TreeNode<T>>,
+        nextNode: StoragePointer<TreeNode<T>>,
         direction: TreeDirection,
     ): Promise<void> {
         const oppositeDirection = allocUtils.getOppositeDirection(direction);
@@ -462,7 +467,7 @@ export class TreeManager extends StorageAccessor {
     }
     
     // `values` will be inserted before `nextItem`.
-    async insertTreeItems(values: any[], nextItem: TreeItem): Promise<void> {
+    async insertTreeItems<T>(values: T[], nextItem: TreeItem<T>): Promise<void> {
         const { accessor, index } = nextItem;
         const elementSize = accessor.getElementSize();
         let bufferLength = await accessor.getField("bufferLength");

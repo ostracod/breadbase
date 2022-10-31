@@ -26,8 +26,8 @@ export interface ResolvedField<T = any> extends Field<T> {
     offset: number;
 }
 
-export interface TreeItem {
-    accessor: ContentAccessor;
+export interface TreeItem<T = any> {
+    accessor: ContentAccessor<T>;
     // Number of items after `startIndex` in tree content.
     index: number;
 }
