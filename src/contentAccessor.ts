@@ -58,6 +58,10 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         return Math.ceil(defaultContentSize / this.getElementSize());
     }
     
+    getMaximumMoveLength(): number {
+        return this.getDefaultBufferLength() * 2;
+    }
+    
     async getItem(index: number): Promise<T> {
         let item = this.items[index];
         if (typeof item === "undefined") {
@@ -97,6 +101,13 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         const previousValues = await this.getItems(0, index);
         const nextValues = await this.getItems(index, itemCount);
         return previousValues.concat(valuesToInsert, nextValues);
+    }
+    
+    async getAndDeleteItems(startIndex: number, endIndex: number): Promise<T[]> {
+        const itemCount = await this.getField("itemCount");
+        const previousValues = await this.getItems(0, startIndex);
+        const nextValues = await this.getItems(endIndex, itemCount);
+        return previousValues.concat(nextValues);
     }
     
     async insertItems(index: number, valuesToInsert: T[]): Promise<void> {
@@ -195,6 +206,40 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         );
         const parent = await this.getField("parent");
         await this.manager.insertTreeNode(node, parent, TreeDirection.Backward);
+    }
+    
+    async borrowItems(): Promise<void> {
+        const parent = await this.getField("parent");
+        const nextParent = await this.manager.getNextTreeNode(parent);
+        if (nextParent === null) {
+            return;
+        }
+        const bufferLength = await this.getField("bufferLength");
+        const itemCount = await this.getField("itemCount");
+        const targetCount = Math.ceil(bufferLength / 2);
+        const borrowCount = targetCount - itemCount;
+        const nextAccessor = await this.manager.createNodeContentAccessor(nextParent);
+        const nextItemCount = await nextAccessor.getField("itemCount");
+        if (borrowCount >= nextItemCount) {
+            const valuesToBorrow = await nextAccessor.getAllItems();
+            await this.manager.deleteTreeNode(nextParent);
+            await this.insertItems(itemCount, valuesToBorrow);
+            return;
+        }
+        const nextBufferLength = await nextAccessor.getField("bufferLength");
+        const nextTargetCount = Math.ceil(nextBufferLength / 2);
+        const countAfterDeletion = nextItemCount - borrowCount;
+        if (countAfterDeletion < nextTargetCount) {
+            return;
+        }
+        const valuesToBorrow = await nextAccessor.getItems(0, borrowCount);
+        if (countAfterDeletion > nextAccessor.getMaximumMoveLength()) {
+            const remainingValues = await nextAccessor.getItems(borrowCount, nextItemCount);
+            await nextAccessor.shatter(remainingValues);
+        } else {
+            await nextAccessor.deleteItems(0, borrowCount);
+        }
+        await this.insertItems(itemCount, valuesToBorrow);
     }
 }
 

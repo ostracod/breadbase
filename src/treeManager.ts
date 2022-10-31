@@ -21,6 +21,21 @@ export class TreeManager extends StorageAccessor {
         this.heapAllocator = heapAllocator;
     }
     
+    async createTreeContentAccessor<T>(
+        content: StoragePointer<TreeContent<T>>,
+    ): Promise<ContentAccessor<T>> {
+        const output = new ContentAccessor<T>();
+        await output.init(this, content);
+        return output;
+    }
+    
+    async createNodeContentAccessor<T>(
+        node: StoragePointer<TreeNode<T>>,
+    ): Promise<ContentAccessor<T>> {
+        const content = await this.readStructField(node, "treeContent");
+        return await this.createTreeContentAccessor(content);
+    }
+    
     async findTreeItemByIndex<T>(
         root: StoragePointer<TreeRoot<T>>,
         index: number,
@@ -38,8 +53,7 @@ export class TreeManager extends StorageAccessor {
             if (index >= leftIndex) {
                 const rightIndex = leftIndex + itemCount;
                 if (index < rightIndex) {
-                    const accessor = new ContentAccessor<T>();
-                    await accessor.init(this, content);
+                    const accessor = await this.createTreeContentAccessor(content);
                     return { accessor, index: index - leftIndex };
                 } else {
                     startIndex = rightIndex;
@@ -56,9 +70,7 @@ export class TreeManager extends StorageAccessor {
         direction: TreeDirection,
         handle: (value: T) => Promise<boolean>,
     ): Promise<boolean> {
-        const content = await this.readStructField(node, "treeContent");
-        const accessor = new ContentAccessor<T>();
-        await accessor.init(this, content);
+        const accessor = await this.createNodeContentAccessor(node);
         const itemCount = await accessor.getField("itemCount");
         let startIndex: number;
         let endIndex: number;
@@ -200,9 +212,7 @@ export class TreeManager extends StorageAccessor {
         let node = await this.readStructField(root, "child");
         let startNode: StoragePointer<TreeNode<T>> = null;
         while (!node.isNull()) {
-            const content = await this.readStructField(node, "treeContent");
-            const accessor = new ContentAccessor<T>();
-            await accessor.init(this, content);
+            const accessor = await this.createNodeContentAccessor(node);
             const value = await accessor.getItem(0);
             if (await compare(value) < 0) {
                 startNode = node;
@@ -213,9 +223,7 @@ export class TreeManager extends StorageAccessor {
         }
         node = startNode;
         while (true) {
-            const content = await this.readStructField(node, "treeContent");
-            const accessor = new ContentAccessor<T>();
-            await accessor.init(this, content);
+            const accessor = await this.createNodeContentAccessor(node);
             const itemCount = await accessor.getField("itemCount");
             // TODO: Use binary search.
             for (let index = 0; index < itemCount; index++) {
@@ -481,7 +489,7 @@ export class TreeManager extends StorageAccessor {
             bufferLength = Math.max(totalCount, defaultLength);
             const nextValues = await accessor.getAndInsertItems(index, values);
             await accessor.resizeBuffer(bufferLength, nextValues);
-        } else if (itemCount - index > defaultLength * 2) {
+        } else if (itemCount - index > accessor.getMaximumMoveLength()) {
             const nextValues = await accessor.getAndInsertItems(index, values);
             await accessor.shatter(nextValues);
         } else if (totalCount <= bufferLength) {
@@ -491,9 +499,68 @@ export class TreeManager extends StorageAccessor {
         }
     }
     
-    async deleteTreeItem(item: TreeItem): Promise<void> {
-        // TODO: Implement.
-        
+    // `startIndex` is inclusive, and `endIndex` is exclusive.
+    async deleteItemsHelper(
+        accessor: ContentAccessor,
+        startIndex: number,
+        endIndex: number,
+    ): Promise<void> {
+        const itemCount = await accessor.getField("itemCount");
+        if (itemCount - endIndex > accessor.getMaximumMoveLength()) {
+            const nextValues = await accessor.getAndDeleteItems(startIndex, endIndex);
+            await accessor.shatter(nextValues);
+            return;
+        }
+        const countAfterDeletion = itemCount - (endIndex - startIndex);
+        let bufferLength = await accessor.getField("bufferLength");
+        const hasLowUsage = (countAfterDeletion / bufferLength < 0.25);
+        const defaultLength = accessor.getDefaultBufferLength();
+        if (bufferLength >= defaultLength * 2 && hasLowUsage) {
+            bufferLength = Math.max(countAfterDeletion * 2, defaultLength);
+            const nextValues = await accessor.getAndDeleteItems(startIndex, endIndex);
+            await accessor.resizeBuffer(bufferLength, nextValues);
+        } else {
+            await accessor.deleteItems(startIndex, endIndex);
+            if (hasLowUsage) {
+                await accessor.borrowItems();
+            }
+        }
+    }
+    
+    // `startItem` is inclusive, and `endItem` is exclusive.
+    async deleteTreeItems<T>(startItem: TreeItem<T>, endItem: TreeItem<T>): Promise<void> {
+        const { accessor: startAccessor, index: startIndex } = startItem;
+        const { accessor: endAccessor, index: endIndex } = endItem;
+        const startNode = await startAccessor.getField("parent");
+        const endNode = await endAccessor.getField("parent");
+        // We iterate backward here, because `deleteItemsHelper` may borrow
+        // items from the next node (but not the previous node).
+        let node = endNode;
+        while (node !== null) {
+            const accessor = await this.createNodeContentAccessor(node);
+            const itemCount = await accessor.getField("itemCount");
+            let previousNode: StoragePointer<TreeNode<T>>;
+            let tempStartIndex: number;
+            if (node.index === startNode.index) {
+                previousNode = null;
+                tempStartIndex = startIndex;
+            } else {
+                previousNode = await this.getPreviousTreeNode(node);
+                tempStartIndex = 0;
+            }
+            let tempEndIndex: number;
+            if (node.index === endNode.index) {
+                tempEndIndex = endIndex;
+            } else {
+                tempEndIndex = itemCount;
+            }
+            if (tempStartIndex <= 0 && tempEndIndex >= itemCount) {
+                await this.deleteTreeNode(node);
+            } else {
+                await this.deleteItemsHelper(accessor, tempStartIndex, tempEndIndex);
+            }
+            node = previousNode;
+        }
     }
 }
 
