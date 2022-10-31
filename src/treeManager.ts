@@ -1,6 +1,6 @@
 
 import { TreeItem, NodeChildKey, TreeNodeMetrics } from "./internalTypes.js";
-import { AllocType, TreeDirection, defaultContentSize } from "./constants.js";
+import { AllocType, TreeDirection } from "./constants.js";
 import * as allocUtils from "./allocUtils.js";
 import { TailStructType } from "./dataType.js";
 import { Alloc, allocType, TreeRoot, treeRootType, TreeNode, treeNodeType, TreeContent } from "./builtTypes.js";
@@ -183,6 +183,10 @@ export class TreeManager extends StorageAccessor {
         node: StoragePointer<TreeNode<T>>,
     ): Promise<StoragePointer<TreeNode<T>>> {
         return this.getNeighborTreeNode(node, TreeDirection.Backward);
+    }
+    
+    async isFinalTreeNode(node: StoragePointer<TreeNode>): Promise<boolean> {
+        return (await this.getNextTreeNode(node) === null);
     }
     
     // Returns the first item for which `compare` returns 0 or 1.
@@ -469,17 +473,22 @@ export class TreeManager extends StorageAccessor {
     // `values` will be inserted before `nextItem`.
     async insertTreeItems<T>(values: T[], nextItem: TreeItem<T>): Promise<void> {
         const { accessor, index } = nextItem;
-        const elementSize = accessor.getElementSize();
         let bufferLength = await accessor.getField("bufferLength");
-        const bufferSize = bufferLength * elementSize;
-        if (bufferSize < defaultContentSize) {
-            const minimumLength = Math.ceil(defaultContentSize / elementSize);
-            const itemCount = await accessor.getField("itemCount");
-            bufferLength = Math.max(itemCount + values.length, minimumLength);
-            await accessor.resizeBuffer(bufferLength);
+        const itemCount = await accessor.getField("itemCount");
+        const totalCount = itemCount + values.length;
+        const defaultLength = accessor.getDefaultBufferLength();
+        if (bufferLength < defaultLength) {
+            bufferLength = Math.max(totalCount, defaultLength);
+            const nextValues = await accessor.getAndInsertItems(index, values);
+            await accessor.resizeBuffer(bufferLength, nextValues);
+        } else if (itemCount - index > defaultLength * 2) {
+            const nextValues = await accessor.getAndInsertItems(index, values);
+            await accessor.shatter(nextValues);
+        } else if (totalCount <= bufferLength) {
+            await accessor.insertItems(index, values);
+        } else {
+            await accessor.insertItemsWithOverflow(index, values);
         }
-        // TODO: Finish implementation.
-        
     }
     
     async deleteTreeItem(item: TreeItem): Promise<void> {
