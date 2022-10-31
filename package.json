@@ -5,7 +5,8 @@
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "scripts": {
-        "build": "node ./buildTypes.js && tsc",
+        "prebuild": "tsc --project tsconfigPrebuild.json && node ./buildTypes.js",
+        "build": "npm run prebuild && tsc",
         "postinstall": "npm run build",
         "test": "jest tests",
         "lint": "eslint . --ext .ts"

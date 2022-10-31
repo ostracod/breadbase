@@ -1,6 +1,7 @@
 
 node_modules
 dist
+buildTypes.js
 builtTypes.ts
 
 

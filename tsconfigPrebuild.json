@@ -1,10 +1,10 @@
 {
     "extends": "./tsconfigBase.json",
+    "compilerOptions": {
+        "outDir": "."
+    },
     "include": [
-        "src/**/*.ts",
-        "tests/**/*.ts",
-        "buildTypes.ts",
-        "jest.config.ts"
+        "buildTypes.ts"
     ],
     "exclude": [
         "node_modules"
