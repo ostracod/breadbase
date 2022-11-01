@@ -1,5 +1,5 @@
 
-import { NodeChildKey } from "../src/internalTypes.js";
+import { TreeItem, NodeChildKey } from "../src/internalTypes.js";
 import { allocType, TreeRoot, treeRootType, TreeNode, treeNodeType } from "../src/builtTypes.js";
 import { defaultContentSize, AllocType, TreeDirection } from "../src/constants.js";
 import { MemoryStorage } from "../src/storage.js";
@@ -80,15 +80,33 @@ class TreeTester extends StorageAccessor {
         await this.manager.deleteTreeNode(this.nodes[nodeIndex]);
     }
     
+    async createItem(
+        nodeIndex: number,
+        contentIndex: number,
+    ): Promise<TreeItem<number>> {
+        const node = this.nodes[nodeIndex];
+        const accessor = await this.manager.createNodeContentAccessor(node);
+        return { accessor, index: contentIndex };
+    }
+    
     async insertItems(
         nodeIndex: number,
         contentIndex: number,
         values: number[],
     ): Promise<void> {
-        const node = this.nodes[nodeIndex];
-        const accessor = await this.manager.createNodeContentAccessor(node);
-        const item = { accessor, index: contentIndex };
+        const item = await this.createItem(nodeIndex, contentIndex);
         await this.manager.insertTreeItems(values, item);
+    }
+    
+    async deleteItems(
+        startNodeIndex: number,
+        startContentIndex: number,
+        endNodeIndex: number,
+        endContentIndex: number,
+    ): Promise<void> {
+        const startItem = await this.createItem(startNodeIndex, startContentIndex);
+        const endItem = await this.createItem(endNodeIndex, endContentIndex);
+        await this.manager.deleteTreeItems(startItem, endItem);
     }
     
     async assertRootChild(childIndex: number): Promise<void> {
@@ -457,6 +475,211 @@ describe("TreeManager", () => {
                 {
                     bufferLength: defaultContentSize,
                     values: [30, 30],
+                },
+            ]);
+        });
+    });
+    
+    describe("deleteTreeItems", () => {
+        it("deletes without borrow", async () => {
+            const tester = new TreeTester();
+            await tester.initWithContents([
+                {
+                    bufferLength: 7,
+                    values: [10, 11, 12, 13, 14, 15, 16],
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize, 10),
+                },
+            ]);
+            await tester.deleteItems(0, 3, 0, 5);
+            await tester.assertContents([
+                {
+                    bufferLength: 7,
+                    values: [10, 11, 12, 15, 16],
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize, 10),
+                },
+            ]);
+        });
+        
+        it("deletes across multiple nodes", async () => {
+            const tester = new TreeTester();
+            await tester.initWithContents([
+                {
+                    bufferLength: 5,
+                    values: [10, 11, 12, 13, 14],
+                },
+                {
+                    bufferLength: 3,
+                    values: [20, 21, 22],
+                },
+                {
+                    bufferLength: 5,
+                    values: [30, 31, 32, 33, 34],
+                },
+            ]);
+            await tester.deleteItems(0, 4, 2, 1);
+            await tester.assertContents([
+                {
+                    bufferLength: 5,
+                    values: [10, 11, 12, 13],
+                },
+                {
+                    bufferLength: 5,
+                    values: [31, 32, 33, 34],
+                },
+            ]);
+        });
+        
+        it("deletes and shatters buffer", async () => {
+            const tester = new TreeTester();
+            const initLength = defaultContentSize * 3;
+            await tester.initWithContents([
+                {
+                    bufferLength: initLength,
+                    values: createArray(initLength, 10),
+                },
+            ]);
+            await tester.deleteItems(0, 5, 0, 7);
+            await tester.assertContents([
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize, 10),
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize, 10),
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize - 2, 10),
+                },
+            ]);
+        });
+        
+        it("deletes and resizes buffer", async () => {
+            const tester = new TreeTester();
+            await tester.initWithContents([
+                {
+                    bufferLength: defaultContentSize * 5,
+                    values: createArray(defaultContentSize, 10),
+                },
+            ]);
+            const nextLength = defaultContentSize - 2;
+            await tester.deleteItems(0, nextLength, 0, defaultContentSize);
+            await tester.assertContents([
+                {
+                    bufferLength: nextLength * 2,
+                    values: createArray(nextLength, 10),
+                },
+            ]);
+        });
+        
+        it("borrows and deletes next node", async () => {
+            const tester = new TreeTester();
+            await tester.initWithContents([
+                {
+                    bufferLength: defaultContentSize,
+                    values: [10, 11, 12],
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: [20, 21],
+                },
+            ]);
+            await tester.deleteItems(0, 1, 0, 2);
+            await tester.assertContents([
+                {
+                    bufferLength: defaultContentSize,
+                    values: [10, 12, 20, 21],
+                },
+            ]);
+        });
+        
+        it("does not borrow if next node is starved", async () => {
+            const tester = new TreeTester();
+            await tester.initWithContents([
+                {
+                    bufferLength: 16,
+                    values: [10, 11, 12, 13],
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: [20, 21, 22, 23, 24, 25],
+                },
+            ]);
+            await tester.deleteItems(0, 1, 0, 2);
+            await tester.assertContents([
+                {
+                    bufferLength: 16,
+                    values: [10, 12, 13],
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: [20, 21, 22, 23, 24, 25],
+                },
+            ]);
+        });
+        
+        it("borrows from next node", async () => {
+            const tester = new TreeTester();
+            await tester.initWithContents([
+                {
+                    bufferLength: 16,
+                    values: [10, 11, 12, 13],
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize, 20),
+                },
+            ]);
+            await tester.deleteItems(0, 1, 0, 2);
+            await tester.assertContents([
+                {
+                    bufferLength: 16,
+                    values: [10, 12, 13, 20, 20, 20, 20, 20],
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize - 5, 20),
+                },
+            ]);
+        });
+        
+        it("borrows and shatters next node", async () => {
+            const tester = new TreeTester();
+            const initLength = defaultContentSize * 3;
+            await tester.initWithContents([
+                {
+                    bufferLength: 16,
+                    values: [10, 11, 12, 13],
+                },
+                {
+                    bufferLength: initLength,
+                    values: createArray(initLength, 20),
+                },
+            ]);
+            await tester.deleteItems(0, 1, 0, 2);
+            await tester.assertContents([
+                {
+                    bufferLength: 16,
+                    values: [10, 12, 13, 20, 20, 20, 20, 20],
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize, 20),
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize, 20),
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize - 5, 20),
                 },
             ]);
         });
