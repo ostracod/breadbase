@@ -164,7 +164,7 @@ export class TreeManager extends StorageAccessor {
         if (nextChild.isNull()) {
             let child = node;
             while (true) {
-                const parent = await this.readStructField(node, "parent");
+                const parent = await this.readStructField(child, "parent");
                 const allocType = await this.readStructField(parent, "type");
                 if (allocType !== AllocType.Node) {
                     return null;
@@ -199,6 +199,13 @@ export class TreeManager extends StorageAccessor {
     
     async isFinalTreeNode(node: StoragePointer<TreeNode>): Promise<boolean> {
         return (await this.getNextTreeNode(node) === null);
+    }
+    
+    async getFirstTreeNode<T>(
+        root: StoragePointer<TreeRoot<T>>,
+    ): Promise<StoragePointer<TreeNode<T>>> {
+        const node = await this.readStructField(root, "child");
+        return await this.getFarthestChild(node, TreeDirection.Backward);
     }
     
     // Returns the first item for which `compare` returns 0 or 1.

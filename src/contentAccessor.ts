@@ -22,13 +22,15 @@ export class ContentAccessor<T = any> extends StorageAccessor {
     items: T[];
     
     async init(manager: TreeManager, content: StoragePointer<TreeContent<T>>): Promise<void> {
-        this.heapAllocator = this.manager.heapAllocator;
         this.manager = manager;
+        this.heapAllocator = this.manager.heapAllocator;
         this.setStorage(this.manager.storage);
+        this.content = content;
         this.fieldValues = {};
+        this.items = [];
         const allocType = await this.getField("type");
         const tailStructType = contentTypeMap.get(allocType) as TailStructType<TreeContent<T>>;
-        this.content = content.convert(tailStructType);
+        this.content = this.content.convert(tailStructType);
     }
     
     async getField<T2 extends string & (keyof TreeContent)>(
