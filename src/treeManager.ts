@@ -158,7 +158,7 @@ export class TreeManager extends StorageAccessor {
     async getNeighborTreeNode<T>(
         node: StoragePointer<TreeNode<T>>,
         direction: TreeDirection,
-    ): Promise<StoragePointer<TreeNode<T>>> {
+    ): Promise<StoragePointer<TreeNode<T>> | null> {
         const { childKey, oppositeChildKey } = allocUtils.getChildKeys(direction);
         const nextChild = await this.readStructField(node, childKey);
         if (nextChild.isNull()) {
@@ -187,13 +187,13 @@ export class TreeManager extends StorageAccessor {
     
     async getNextTreeNode<T>(
         node: StoragePointer<TreeNode<T>>,
-    ): Promise<StoragePointer<TreeNode<T>>> {
+    ): Promise<StoragePointer<TreeNode<T>> | null> {
         return this.getNeighborTreeNode(node, TreeDirection.Forward);
     }
     
     async getPreviousTreeNode<T>(
         node: StoragePointer<TreeNode<T>>,
-    ): Promise<StoragePointer<TreeNode<T>>> {
+    ): Promise<StoragePointer<TreeNode<T>> | null> {
         return this.getNeighborTreeNode(node, TreeDirection.Backward);
     }
     
@@ -449,7 +449,7 @@ export class TreeManager extends StorageAccessor {
         if (previousChild.isNull()) {
             await this.setTreeNodeChild(nextNode, oppositeChildKey, node);
         } else {
-            const previousNode = await this.getNeighborTreeNode(node, oppositeDirection);
+            let previousNode = await this.getNeighborTreeNode(nextNode, oppositeDirection);
             const childKey = allocUtils.getChildKey(direction);
             await this.setTreeNodeChild(previousNode, childKey, node);
         }
@@ -492,15 +492,15 @@ export class TreeManager extends StorageAccessor {
         const itemCount = await accessor.getField("itemCount");
         const totalCount = itemCount + values.length;
         const defaultLength = accessor.getDefaultBufferLength();
-        if (bufferLength < defaultLength) {
-            bufferLength = Math.max(totalCount, defaultLength);
-            const nextValues = await accessor.getAndInsertItems(index, values);
-            await accessor.resizeBuffer(bufferLength, nextValues);
-        } else if (itemCount - index > accessor.getMaximumMoveLength()) {
+        if (itemCount - index > accessor.getMaximumMoveLength()) {
             const nextValues = await accessor.getAndInsertItems(index, values);
             await accessor.shatter(nextValues);
         } else if (totalCount <= bufferLength) {
             await accessor.insertItems(index, values);
+        } else if (bufferLength < defaultLength) {
+            bufferLength = Math.max(totalCount, defaultLength);
+            const nextValues = await accessor.getAndInsertItems(index, values);
+            await accessor.resizeBuffer(bufferLength, nextValues);
         } else {
             await accessor.insertItemsWithOverflow(index, values);
         }
@@ -546,7 +546,7 @@ export class TreeManager extends StorageAccessor {
         while (node !== null) {
             const accessor = await this.createNodeContentAccessor(node);
             const itemCount = await accessor.getField("itemCount");
-            let previousNode: StoragePointer<TreeNode<T>>;
+            let previousNode: StoragePointer<TreeNode<T>> | null;
             let tempStartIndex: number;
             if (node.index === startNode.index) {
                 previousNode = null;

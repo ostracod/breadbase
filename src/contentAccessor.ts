@@ -1,5 +1,4 @@
 
-import { TailStruct } from "./internalTypes.js";
 import { defaultContentSize, TreeDirection } from "./constants.js";
 import { TailStructType } from "./dataType.js";
 import { TreeContent, stringAsciiCharsType } from "./builtTypes.js";
@@ -17,7 +16,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
     heapAllocator: HeapAllocator;
     manager: TreeManager;
     content: StoragePointer<TreeContent<T>>;
-    tailStructType: TailStructType<TailStruct<T>>;
+    tailStructType: TailStructType<TreeContent<T>>;
     fieldValues: Partial<TreeContent>;
     items: T[];
     
@@ -29,8 +28,8 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         this.fieldValues = {};
         this.items = [];
         const allocType = await this.getField("type");
-        const tailStructType = contentTypeMap.get(allocType) as TailStructType<TreeContent<T>>;
-        this.content = this.content.convert(tailStructType);
+        this.tailStructType = contentTypeMap.get(allocType) as TailStructType<TreeContent<T>>;
+        this.content = this.content.convert(this.tailStructType);
     }
     
     async getField<T2 extends string & (keyof TreeContent)>(
@@ -168,7 +167,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
             const subValues = values.slice(startIndex, endIndex);
             const node = await this.manager.createTreeNode(
                 allocType,
-                subValues.length,
+                defaultLength,
                 subValues,
             );
             await this.manager.insertTreeNode(node, parent, TreeDirection.Forward);

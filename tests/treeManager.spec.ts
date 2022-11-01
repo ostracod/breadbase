@@ -1,7 +1,7 @@
 
 import { NodeChildKey } from "../src/internalTypes.js";
 import { allocType, TreeRoot, treeRootType, TreeNode, treeNodeType } from "../src/builtTypes.js";
-import { AllocType, TreeDirection } from "../src/constants.js";
+import { defaultContentSize, AllocType, TreeDirection } from "../src/constants.js";
 import { MemoryStorage } from "../src/storage.js";
 import { StoragePointer, createNullPointer } from "../src/storagePointer.js";
 import { StorageAccessor } from "../src/storageAccessor.js";
@@ -14,6 +14,10 @@ interface TestContent {
 }
 
 const nullNodePointer = createNullPointer(treeNodeType);
+
+const createArray = (length: number, fillValue: number): number[] => (
+    (new Array(length).fill(fillValue))
+);
 
 class TreeTester extends StorageAccessor {
     allocator: HeapAllocator;
@@ -76,6 +80,17 @@ class TreeTester extends StorageAccessor {
         await this.manager.deleteTreeNode(this.nodes[nodeIndex]);
     }
     
+    async insertItems(
+        nodeIndex: number,
+        contentIndex: number,
+        values: number[],
+    ): Promise<void> {
+        const node = this.nodes[nodeIndex];
+        const accessor = await this.manager.createNodeContentAccessor(node);
+        const item = { accessor, index: contentIndex };
+        await this.manager.insertTreeItems(values, item);
+    }
+    
     async assertRootChild(childIndex: number): Promise<void> {
         const child = (childIndex === null) ? nullNodePointer : this.nodes[childIndex];
         expect(
@@ -128,6 +143,7 @@ class TreeTester extends StorageAccessor {
             index += 1;
             node = await this.manager.getNextTreeNode(node);
         }
+        expect(index).toEqual(contents.length);
     }
 }
 
@@ -251,6 +267,197 @@ describe("TreeManager", () => {
             await tester.assertContents([
                 { bufferLength: 5, values: [10, 20, 30] },
                 { bufferLength: 3, values: [40, 50, 60] },
+            ]);
+        });
+        
+        it("inserts without overflow", async () => {
+            const tester = new TreeTester();
+            await tester.initWithContents([
+                { bufferLength: 5, values: [10, 20, 30] },
+            ]);
+            await tester.insertItems(0, 2, [25, 26]);
+            await tester.assertContents([
+                { bufferLength: 5, values: [10, 20, 25, 26, 30] },
+            ]);
+        });
+        
+        it("inserts and resizes buffer", async () => {
+            const tester = new TreeTester();
+            await tester.initWithContents([
+                { bufferLength: 3, values: [10, 20, 30] },
+            ]);
+            await tester.insertItems(0, 2, [25, 26]);
+            await tester.assertContents([
+                { bufferLength: defaultContentSize, values: [10, 20, 25, 26, 30] },
+            ]);
+        });
+        
+        it("inserts into end of full final content", async () => {
+            const tester = new TreeTester();
+            await tester.initWithContents([
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize, 10),
+                },
+            ]);
+            await tester.insertItems(0, defaultContentSize, [25, 26]);
+            await tester.assertContents([
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize, 10),
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: [25, 26],
+                },
+            ]);
+        });
+        
+        it("inserts into end of non-full final content", async () => {
+            const tester = new TreeTester();
+            const initLength = defaultContentSize - 2;
+            await tester.initWithContents([
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(initLength, 10),
+                },
+            ]);
+            await tester.insertItems(0, initLength, [25, 26, 27, 28]);
+            await tester.assertContents([
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(initLength, 10).concat([25, 26]),
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: [27, 28],
+                },
+            ]);
+        });
+        it("inserts into middle of full final content", async () => {
+            const tester = new TreeTester();
+            await tester.initWithContents([
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize, 10),
+                },
+            ]);
+            await tester.insertItems(0, 5, [25, 26]);
+            await tester.assertContents([
+                {
+                    bufferLength: defaultContentSize,
+                    values: [10, 10, 10, 10, 10, 25, 26].concat(
+                        createArray(defaultContentSize - 7, 10),
+                    ),
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: [10, 10],
+                },
+            ]);
+        });
+        
+        it("inserts into end of full non-final content", async () => {
+            const tester = new TreeTester();
+            await tester.initWithContents([
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize, 10),
+                },
+                {
+                    bufferLength: 1,
+                    values: [30],
+                },
+            ]);
+            await tester.insertItems(0, defaultContentSize, [25, 26]);
+            const targetLength = Math.ceil(defaultContentSize / 2);
+            await tester.assertContents([
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(targetLength, 10),
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize - targetLength, 10).concat(
+                        [25, 26],
+                    ),
+                },
+                {
+                    bufferLength: 1,
+                    values: [30],
+                },
+            ]);
+        });
+        
+        it("inserts into middle of non-full non-final content", async () => {
+            const tester = new TreeTester();
+            const initLength = defaultContentSize - 2;
+            await tester.initWithContents([
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(initLength, 10),
+                },
+                {
+                    bufferLength: 1,
+                    values: [30],
+                },
+            ]);
+            await tester.insertItems(0, 5, [25, 26, 27, 28]);
+            const targetLength = Math.ceil(defaultContentSize / 2);
+            await tester.assertContents([
+                {
+                    bufferLength: defaultContentSize,
+                    values: [10, 10, 10, 10, 10, 25, 26, 27, 28].concat(
+                        createArray(targetLength - 9, 10),
+                    ),
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray((initLength - targetLength) + 4, 10),
+                },
+                {
+                    bufferLength: 1,
+                    values: [30],
+                },
+            ]);
+        });
+        
+        it("inserts and shatters buffer", async () => {
+            const tester = new TreeTester();
+            const initLength = defaultContentSize * 3;
+            const tenLength = Math.floor(initLength / 2);
+            const thirtyLength = initLength - tenLength;
+            await tester.initWithContents([
+                {
+                    bufferLength: initLength,
+                    values: createArray(tenLength, 10).concat(
+                        createArray(thirtyLength, 30),
+                    ),
+                },
+            ]);
+            await tester.insertItems(0, 5, [25, 26]);
+            const marginLength = (tenLength - defaultContentSize) + 2;
+            await tester.assertContents([
+                {
+                    bufferLength: defaultContentSize,
+                    values: [10, 10, 10, 10, 10, 25, 26].concat(
+                        createArray(defaultContentSize - 7, 10),
+                    ),
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(marginLength, 10).concat(
+                        createArray(defaultContentSize - marginLength, 30),
+                    ),
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: createArray(defaultContentSize, 30),
+                },
+                {
+                    bufferLength: defaultContentSize,
+                    values: [30, 30],
+                },
             ]);
         });
     });
