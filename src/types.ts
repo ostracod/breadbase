@@ -5,37 +5,43 @@
 //export type Value = null | boolean | number | string | Buffer | Value[] | { [key: string]: Value };
 export type Value = any;
 
+export type Direction = "forward" | "backward";
+
 export interface Selector {
     type: string;
 }
 
 export interface DictEntrySelector extends Selector {
     type: "dictEntry";
-    key?: string;
+    key: string;
 }
 
-export interface ListSelector extends Selector {
+export interface SeqSelector extends Selector {
     sort?: Sort;
     filter?: Filter;
 }
 
-export interface ListElemSelector extends ListSelector {
-    type: "listElem";
+export interface SeqElemSelector extends SeqSelector {
+    type: "seqElem";
     index?: number;
 }
 
-export interface ListElemsSelector extends ListSelector {
-    type: "listElems";
+export interface SeqElemsSelector extends SeqSelector {
+    type: "seqElems";
     startIndex?: number;
     endIndex?: number;
+    maxAmount?: number;
+    direction?: Direction;
 }
+
+export type Path = Selector[];
 
 export interface Filter {
     type: string;
 }
 
 export interface ComparisonFilter extends Filter {
-    path: Selector[];
+    path: Path;
     value: Value;
 }
 
@@ -49,8 +55,7 @@ export interface Sort {
 
 export interface ValueSort extends Sort {
     type: "value";
-    path: Selector[];
-    order?: "ascending" | "descending";
+    path: Path;
 }
 
 export interface Index {
@@ -59,7 +64,7 @@ export interface Index {
 
 export interface ValueIndex extends Index {
     type: "value";
-    path: Selector[];
+    path: Path;
 }
 
 

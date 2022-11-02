@@ -1,5 +1,5 @@
 
-import { Selector, Value, Index } from "./types.js";
+import { Path, Value, Index } from "./types.js";
 import { Storage, FileStorage } from "./storage.js";
 import { StorageAccessor } from "./storageAccessor.js";
 import { HeapAllocator } from "./heapAllocator.js";
@@ -18,35 +18,35 @@ export class BreadBase extends StorageAccessor {
         await this.initWithStorage(storage);
     }
     
-    public async load(path: Selector[]): Promise<Value | Value[]> {
+    public async load(path: Path): Promise<Value | Value[]> {
         throw new Error("Not yet implemented.");
     }
     
-    public async set(path: Selector[], value: Value): Promise<void> {
+    public async set(path: Path, value: Value): Promise<void> {
         throw new Error("Not yet implemented.");
     }
     
-    public async appendElem(path: Selector[], value: Value): Promise<void> {
+    public async appendElem(path: Path, value: Value): Promise<void> {
         throw new Error("Not yet implemented.");
     }
     
-    public async appendElems(path: Selector[], values: Value[]): Promise<void> {
+    public async appendElems(path: Path, values: Value[]): Promise<void> {
         throw new Error("Not yet implemented.");
     }
     
-    public async delete(path: Selector[]): Promise<void> {
+    public async delete(path: Path): Promise<void> {
         throw new Error("Not yet implemented.");
     }
     
-    public async addIndex(path: Selector[], index: Index): Promise<void> {
+    public async addIndex(path: Path, index: Index): Promise<void> {
         throw new Error("Not yet implemented.");
     }
     
-    public async removeIndex(path: Selector[], index: Index): Promise<void> {
+    public async removeIndex(path: Path, index: Index): Promise<void> {
         throw new Error("Not yet implemented.");
     }
     
-    public async getIndexes(path: Selector[]): Promise<Index[]> {
+    public async getIndexes(path: Path): Promise<Index[]> {
         throw new Error("Not yet implemented.");
     }
     
