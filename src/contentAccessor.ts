@@ -111,12 +111,18 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         return previousValues.concat(nextValues);
     }
     
+    async updateTotalLengths(): Promise<void> {
+        const parent = await this.getField("parent");
+        await this.manager.updateNodeTotalLengths(parent);
+    }
+    
     async insertItems(index: number, valuesToInsert: T[]): Promise<void> {
         const itemCount = await this.getField("itemCount");
         await this.setField("itemCount", itemCount + valuesToInsert.length);
         const valuesToMove = await this.getItems(index, itemCount);
         await this.setItems(index + valuesToInsert.length, valuesToMove);
         await this.setItems(index, valuesToInsert);
+        await this.updateTotalLengths();
     }
     
     async deleteItems(startIndex: number, endIndex: number): Promise<void> {
@@ -125,6 +131,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         const valuesToMove = await this.getItems(endIndex, itemCount);
         await this.setItems(startIndex, valuesToMove);
         await this.setField("itemCount", itemCount - lengthToDelete);
+        await this.updateTotalLengths();
     }
     
     async isFinalNode(): Promise<boolean> {

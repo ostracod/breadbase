@@ -34,9 +34,4 @@ export interface TreeItem<T = any> {
 
 export type NodeChildKey = "leftChild" | "rightChild";
 
-export interface TreeNodeMetrics {
-    depth: number;
-    length: number;
-}
-
 

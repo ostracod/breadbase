@@ -1,5 +1,5 @@
 
-import { TreeItem, NodeChildKey, TreeNodeMetrics } from "./internalTypes.js";
+import { TreeItem, NodeChildKey } from "./internalTypes.js";
 import { AllocType, TreeDirection } from "./constants.js";
 import * as allocUtils from "./allocUtils.js";
 import { TailStructType } from "./dataType.js";
@@ -291,27 +291,41 @@ export class TreeManager extends StorageAccessor {
         return output;
     }
     
-    async getTreeNodeMetrics(node: StoragePointer<TreeNode>): Promise<TreeNodeMetrics> {
-        if (node.isNull()) {
-            return { depth: 0, length: 0 };
+    async getNodeChildField<T extends string & (keyof TreeNode)>(
+        node: StoragePointer<TreeNode>,
+        childKey: NodeChildKey,
+        name: T,
+        defaultValue: TreeNode[T],
+    ): Promise<TreeNode[T]> {
+        const child = await this.readStructField(node, childKey);
+        return child.isNull() ? defaultValue : await this.readStructField(child, name);
+    }
+    
+    async updateNodeMaximumDepth(node: StoragePointer<TreeNode>): Promise<void> {
+        const depth1 = await this.getNodeChildField(node, "leftChild", "maximumDepth", 0);
+        const depth2 = await this.getNodeChildField(node, "rightChild", "maximumDepth", 0);
+        await this.writeStructField(node, "maximumDepth", Math.max(depth1, depth2) + 1);
+    }
+    
+    async updateNodeTotalLength(node: StoragePointer<TreeNode>): Promise<void> {
+        const length1 = await this.getNodeChildField(node, "leftChild", "totalLength", 0);
+        const length2 = await this.getNodeChildField(node, "rightChild", "totalLength", 0);
+        const content = await this.readStructField(node, "treeContent");
+        const contentLength = await this.readStructField(content, "itemCount");
+        await this.writeStructField(node, "totalLength", length1 + length2 + contentLength);
+    }
+    
+    async updateNodeTotalLengths(startNode: StoragePointer<TreeNode>): Promise<void> {
+        let node = startNode;
+        while (node !== null) {
+            await this.updateNodeTotalLength(node);
+            node = await this.getParentNode(node);
         }
-        return {
-            length: await this.readStructField(node, "totalLength"),
-            depth: await this.readStructField(node, "maximumDepth"),
-        };
     }
     
     async updateTreeNodeMetrics(node: StoragePointer<TreeNode>): Promise<void> {
-        const leftChild = await this.readStructField(node, "leftChild");
-        const leftMetrics = await this.getTreeNodeMetrics(leftChild);
-        const rightChild = await this.readStructField(node, "rightChild");
-        const rightMetrics = await this.getTreeNodeMetrics(rightChild);
-        const content = await this.readStructField(node, "treeContent");
-        const contentLength = await this.readStructField(content, "itemCount");
-        await this.writeStructFields(node, {
-            maximumDepth: Math.max(leftMetrics.depth, rightMetrics.depth) + 1,
-            totalLength: leftMetrics.length + rightMetrics.length + contentLength,
-        });
+        await this.updateNodeMaximumDepth(node);
+        await this.updateNodeTotalLength(node);
     }
     
     async setTreeRootChild<T>(
@@ -449,7 +463,7 @@ export class TreeManager extends StorageAccessor {
         if (previousChild.isNull()) {
             await this.setTreeNodeChild(nextNode, oppositeChildKey, node);
         } else {
-            let previousNode = await this.getNeighborTreeNode(nextNode, oppositeDirection);
+            const previousNode = await this.getNeighborTreeNode(nextNode, oppositeDirection);
             const childKey = allocUtils.getChildKey(direction);
             await this.setTreeNodeChild(previousNode, childKey, node);
         }
