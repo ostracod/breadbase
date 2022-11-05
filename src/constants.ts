@@ -6,7 +6,7 @@ export const defaultContentSize = 50;
 export enum AllocType {
     Node = 1,
     String = 2,
-    StringAsciiChars = 3,
+    AsciiStringContent = 3,
 }
 
 export enum TreeDirection {

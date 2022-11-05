@@ -132,7 +132,7 @@ abstract class InitDataType extends DataType {
 class ReferenceType extends InitDataType {
     name: string;
     instanceName: string;
-    paramReplacements: DataType[];
+    paramReplacements: DataType[] | null;
     
     init(name: string, paramReplacements: DataType[]): void {
         this.name = name;
@@ -144,7 +144,7 @@ class ReferenceType extends InitDataType {
         const paramReplacementsData = data.paramTypes;
         let paramReplacements: DataType[];
         if (typeof paramReplacementsData === "undefined") {
-            paramReplacements = [];
+            paramReplacements = null;
         } else {
             paramReplacements = paramReplacementsData.map((typeData) => (
                 convertDataToType(scope, typeData)
@@ -154,10 +154,10 @@ class ReferenceType extends InitDataType {
     }
     
     getNestedCode(): string {
-        if (this.paramReplacements.length > 0) {
-            return `${this.name}<${this.paramReplacements.map((type) => type.getNestedCode()).join(", ")}>`;
-        } else {
+        if (this.paramReplacements === null) {
             return this.name;
+        } else {
+            return `${this.name}<${this.paramReplacements.map((type) => type.getNestedCode()).join(", ")}>`;
         }
     }
     
@@ -173,21 +173,30 @@ class ReferenceType extends InitDataType {
     dereference(): LiteralType {
         const declaration = typeDeclarationMap.get(this.name);
         let { type } = declaration;
-        if (this.paramReplacements.length > 0) {
-            const paramMap = new Map<string, DataType>();
+        const paramMap = new Map<string, DataType>();
+        if (this.paramReplacements === null) {
+            declaration.paramTypes.forEach((paramType) => {
+                paramMap.set(paramType.name, anyType);
+            });
+        } else {
             this.paramReplacements.forEach((paramReplacement, index) => {
                 const { name } = declaration.paramTypes[index];
                 paramMap.set(name, paramReplacement);
             });
-            type = type.replaceParamTypes(paramMap);
         }
+        type = type.replaceParamTypes(paramMap);
         return type.dereference();
     }
     
     replaceParamTypes(paramMap: ParamMap): DataType {
-        const replacements = this.paramReplacements.map((replacement) => (
-            replacement.replaceParamTypes(paramMap)
-        ));
+        let replacements: DataType[] | null;
+        if (this.paramReplacements === null) {
+            replacements = null;
+        } else {
+            replacements = this.paramReplacements.map((replacement) => (
+                replacement.replaceParamTypes(paramMap)
+            ));
+        }
         const output = new ReferenceType();
         output.init(this.name, replacements);
         return output;

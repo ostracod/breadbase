@@ -69,22 +69,80 @@
             } }
         ]
     } },
+    { "name": "ValueSlot", "type": {
+        "class": "StructType",
+        "fields": [
+            { "name": "type", "type": {
+                "class": "IntType",
+                "size": 1
+            } },
+            { "name": "data", "type": {
+                "class": "ArrayType",
+                "elementType": {
+                    "class": "IntType",
+                    "size": 1
+                },
+                "length": 8
+            } }
+        ]
+    } },
     { "name": "TreeRoot", "paramTypes": ["T"], "type": {
         "class": "StructType",
         "superType": "Alloc",
         "fields": [
             { "name": "child", "type": {
                 "class": "StoragePointerType",
-                "elementType": {
-                    "name": "TreeNode",
-                    "paramTypes": ["T"]
-                }
+                "elementType": "T"
             } }
         ]
     } },
-    { "name": "TreeNode", "paramTypes": ["T"], "type": {
+    { "name": "ContentRoot", "paramTypes": ["T"], "type": {
+        "name": "TreeRoot",
+        "paramTypes": [
+            {
+                "name": "ContentNode",
+                "paramTypes": ["T"]
+            }
+        ]
+    } },
+    { "name": "ListRoot", "type": {
         "class": "StructType",
-        "superType": "Alloc",
+        "superType": {
+            "name": "TreeRoot",
+            "paramTypes": ["Alloc"]
+        },
+        "fields": [
+            { "name": "firstIndex", "type": {
+                "class": "StoragePointerType",
+                "elementType": "IndexRoot"
+            } }
+        ]
+    } },
+    { "name": "IndexRoot", "type": {
+        "class": "StructType",
+        "superType": {
+            "name": "TreeRoot",
+            "paramTypes": ["IndexedNode"]
+        },
+        "fields": [
+            { "name": "nextIndex", "type": {
+                "class": "StoragePointerType",
+                "elementType": "IndexRoot"
+            } }
+        ]
+    } },
+    { "name": "ValueIndexRoot", "type": {
+        "class": "StructType",
+        "superType": "IndexRoot",
+        "fields": [
+            { "name": "firstSelector", "type": {
+                "class": "StoragePointerType",
+                "elementType": "DbSelector"
+            } }
+        ]
+    } },
+    { "name": "TreeBranches", "paramTypes": ["T"], "type": {
+        "class": "StructType",
         "fields": [
             { "name": "parent", "type": {
                 "class": "StoragePointerType",
@@ -92,17 +150,11 @@
             } },
             { "name": "leftChild", "type": {
                 "class": "StoragePointerType",
-                "elementType": {
-                    "name": "TreeNode",
-                    "paramTypes": ["T"]
-                }
+                "elementType": "T"
             } },
             { "name": "rightChild", "type": {
                 "class": "StoragePointerType",
-                "elementType": {
-                    "name": "TreeNode",
-                    "paramTypes": ["T"]
-                }
+                "elementType": "T"
             } },
             { "name": "maximumDepth", "type": {
                 "class": "IntType",
@@ -111,15 +163,41 @@
             { "name": "totalLength", "type": {
                 "class": "IntType",
                 "size": 4
-            } },
+            } }
+        ]
+    } },
+    { "name": "ContentNode", "paramTypes": ["T"], "type": {
+        "class": "StructType",
+        "superType": "Alloc",
+        "fields": [
             { "name": "treeContent", "type": {
                 "class": "StoragePointerType",
                 "elementType": {
                     "name": "TreeContent",
                     "paramTypes": ["T"]
                 }
+            } },
+            { "name": "branches", "type": {
+                "name": "TreeBranches",
+                "paramTypes": [
+                    {
+                        "name": "ContentNode",
+                        "paramTypes": ["T"]
+                    }
+                ]
             } }
         ]
+    } },
+    { "name": "IndexedNode", "type": {
+        "class": "TailStructType",
+        "superType": "Alloc",
+        "fields": [
+            { "name": "valueSlot", "type": "ValueSlot" }
+        ],
+        "elementType": {
+            "name": "TreeBranches",
+            "paramTypes": ["IndexedNode"]
+        }
     } },
     { "name": "TreeContent", "paramTypes": ["T"], "type": {
         "class": "TailStructType",
@@ -128,13 +206,9 @@
             { "name": "parent", "type": {
                 "class": "StoragePointerType",
                 "elementType": {
-                    "name": "TreeNode",
+                    "name": "ContentNode",
                     "paramTypes": ["T"]
                 }
-            } },
-            { "name": "bufferLength", "type": {
-                "class": "IntType",
-                "size": 4
             } },
             { "name": "itemCount", "type": {
                 "class": "IntType",
@@ -143,17 +217,170 @@
         ],
         "elementType": "T"
     } },
-    { "name": "StringAsciiChars", "type": {
+    { "name": "BufferContent", "type": {
+        "name": "TreeContent",
+        "paramTypes": [
+            {
+                "class": "IntType",
+                "size": 1
+            }
+        ]
+    } },
+    { "name": "AsciiStringContent", "type": {
+        "name": "TreeContent",
+        "paramTypes": [
+            {
+                "class": "IntType",
+                "size": 1
+            }
+        ]
+    } },
+    { "name": "Utf16StringContent", "type": {
+        "name": "TreeContent",
+        "paramTypes": [
+            {
+                "class": "IntType",
+                "size": 2
+            }
+        ]
+    } },
+    { "name": "ListContent", "type": {
+        "name": "TreeContent",
+        "paramTypes": ["ValueSlot"]
+    } },
+    { "name": "DictContent", "type": {
+        "name": "TreeContent",
+        "paramTypes": [
+            {
+                "class": "StoragePointerType",
+                "elementType": "DictEntry"
+            }
+        ]
+    } },
+    { "name": "DictEntry", "paramTypes": ["T"], "type": {
         "class": "TailStructType",
-        "superType": {
-            "name": "TreeContent",
-            "paramTypes": [
-                {
-                    "class": "IntType",
-                    "size": 1
-                }
-            ]
-        },
-        "fields": []
+        "superType": "Alloc",
+        "fields": [
+            { "name": "value", "type": "ValueSlot" }
+        ],
+        "elementType": "T"
+    } },
+    { "name": "AsciiDictEntry", "type": {
+        "name": "DictEntry",
+        "paramTypes": [
+            {
+                "class": "IntType",
+                "size": 1
+            }
+        ]
+    } },
+    { "name": "Utf16DictEntry", "type": {
+        "name": "DictEntry",
+        "paramTypes": [
+            {
+                "class": "IntType",
+                "size": 2
+            }
+        ]
+    } },
+    { "name": "DbSelector", "type": {
+        "class": "StructType",
+        "superType": "Alloc",
+        "fields": [
+            { "name": "nextSelector", "type": {
+                "class": "StoragePointerType",
+                "elementType": "DbSelector"
+            } }
+        ]
+    } },
+    { "name": "EntryDbSelector", "type": {
+        "class": "TailStructType",
+        "superType": "DbSelector",
+        "fields": [],
+        "elementType": {
+            "class": "IntType",
+            "size": 2
+        }
+    } },
+    { "name": "ElemDbSelector", "type": {
+        "class": "StructType",
+        "superType": "DbSelector",
+        "fields": [
+            { "name": "sort", "type": {
+                "class": "StoragePointerType",
+                "elementType": "Alloc"
+            } },
+            { "name": "filter", "type": {
+                "class": "StoragePointerType",
+                "elementType": "Alloc"
+            } },
+            { "name": "elemIndex", "type": {
+                "class": "IntType",
+                "size": 4
+            } }
+        ]
+    } },
+    { "name": "ElemsDbSelector", "type": {
+        "class": "StructType",
+        "superType": "DbSelector",
+        "fields": [
+            { "name": "sort", "type": {
+                "class": "StoragePointerType",
+                "elementType": "Alloc"
+            } },
+            { "name": "filter", "type": {
+                "class": "StoragePointerType",
+                "elementType": "Alloc"
+            } },
+            { "name": "startElemIndex", "type": {
+                "class": "IntType",
+                "size": 4
+            } },
+            { "name": "direction", "type": {
+                "class": "IntType",
+                "size": 1
+            } }
+        ]
+    } },
+    { "name": "AmountDbSelector", "type": {
+        "class": "StructType",
+        "superType": "ElemsDbSelector",
+        "fields": [
+            { "name": "maximumAmount", "type": {
+                "class": "IntType",
+                "size": 4
+            } }
+        ]
+    } },
+    { "name": "RangeDbSelector", "type": {
+        "class": "StructType",
+        "superType": "ElemsDbSelector",
+        "fields": [
+            { "name": "endElemIndex", "type": {
+                "class": "IntType",
+                "size": 4
+            } }
+        ]
+    } },
+    { "name": "ValueDbSort", "type": {
+        "class": "StructType",
+        "superType": "Alloc",
+        "fields": [
+            { "name": "firstSelector", "type": {
+                "class": "StoragePointerType",
+                "elementType": "DbSelector"
+            } }
+        ]
+    } },
+    { "name": "EqualDbFilter", "type": {
+        "class": "StructType",
+        "superType": "Alloc",
+        "fields": [
+            { "name": "firstSelector", "type": {
+                "class": "StoragePointerType",
+                "elementType": "DbSelector"
+            } },
+            { "name": "valueSlot", "type": "ValueSlot" }
+        ]
     } }
 ]

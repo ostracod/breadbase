@@ -1,5 +1,6 @@
 
 import { DataType, Struct, TailStruct } from "./internalTypes.js";
+import { TreeBranches, ContentNode } from "./builtTypes.js";
 import { ArrayType, StructType, TailStructType } from "./dataType.js";
 
 export class StoragePointer<T> {
@@ -52,5 +53,9 @@ export const getTailElementPointer = <T>(
     const elementSize = elementType.getSize();
     return new StoragePointer(tailIndex + index * elementSize, elementType);
 };
+
+export const getBranchesFieldPointer = <T1 extends ContentNode, T2 extends string & (keyof TreeBranches)>(node: StoragePointer<T1>, name: T2): StoragePointer<T1["branches"][T2]> => (
+    getStructFieldPointer(getStructFieldPointer(node, "branches"), name)
+);
 
 

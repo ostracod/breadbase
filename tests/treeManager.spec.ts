@@ -1,6 +1,6 @@
 
-import { TreeItem, NodeChildKey } from "../src/internalTypes.js";
-import { allocType, TreeRoot, treeRootType, TreeNode, treeNodeType } from "../src/builtTypes.js";
+import { ContentItem, NodeChildKey } from "../src/internalTypes.js";
+import { allocType, ContentRoot, contentRootType, ContentNode, contentNodeType } from "../src/builtTypes.js";
 import { defaultContentSize, AllocType, TreeDirection } from "../src/constants.js";
 import { MemoryStorage } from "../src/storage.js";
 import { StoragePointer, createNullPointer } from "../src/storagePointer.js";
@@ -13,7 +13,7 @@ interface TestContent {
     values: number[];
 }
 
-const nullNodePointer = createNullPointer(treeNodeType);
+const nullNodePointer = createNullPointer(contentNodeType);
 
 const createArray = (length: number, fillValue: number): number[] => (
     (new Array(length).fill(fillValue))
@@ -22,8 +22,8 @@ const createArray = (length: number, fillValue: number): number[] => (
 class TreeTester extends StorageAccessor {
     allocator: HeapAllocator;
     manager: TreeManager;
-    nodes: StoragePointer<TreeNode<number>>[];
-    root: StoragePointer<TreeRoot<number>>;
+    nodes: StoragePointer<ContentNode<number>>[];
+    root: StoragePointer<ContentRoot<number>>;
     
     async init(): Promise<void> {
         this.setStorage(new MemoryStorage());
@@ -32,15 +32,15 @@ class TreeTester extends StorageAccessor {
         this.manager = new TreeManager(this.storage, this.allocator);
         this.root = (await this.allocator.createAlloc(
             AllocType.String,
-            treeRootType.getSize() - allocType.getSize(),
-        )).convert(treeRootType);
+            contentRootType.getSize() - allocType.getSize(),
+        )).convert(contentRootType);
         this.nodes = [];
     }
     
     async initWithNodes(nodeAmount: number): Promise<void> {
         await this.init();
         while (this.nodes.length < nodeAmount) {
-            const node = await this.manager.createTreeNode(AllocType.StringAsciiChars, 3, []);
+            const node = await this.manager.createTreeNode(AllocType.AsciiStringContent, 3, []);
             this.nodes.push(node);
         }
         await this.manager.setTreeRootChild(this.root, this.nodes[0]);
@@ -51,7 +51,7 @@ class TreeTester extends StorageAccessor {
         for (let index = 0; index < contents.length; index++) {
             const content = contents[index];
             const node = await this.manager.createTreeNode(
-                AllocType.StringAsciiChars,
+                AllocType.AsciiStringContent,
                 content.bufferLength,
                 content.values,
             );
@@ -83,7 +83,7 @@ class TreeTester extends StorageAccessor {
     async createItem(
         nodeIndex: number,
         contentIndex: number,
-    ): Promise<TreeItem<number>> {
+    ): Promise<ContentItem<number>> {
         const node = this.nodes[nodeIndex];
         const accessor = await this.manager.createNodeContentAccessor(node);
         return { accessor, index: contentIndex };
@@ -116,7 +116,7 @@ class TreeTester extends StorageAccessor {
         ).toEqual(child.index);
         if (!child.isNull()) {
             expect(
-                (await this.readStructField(child, "parent")).index,
+                (await this.manager.readBranchesField(child, "parent")).index,
             ).toEqual(this.root.index);
         }
     }
@@ -129,11 +129,11 @@ class TreeTester extends StorageAccessor {
         const node = this.nodes[nodeIndex];
         const child = (childIndex === null) ? nullNodePointer : this.nodes[childIndex];
         expect(
-            (await this.readStructField(node, childKey)).index,
+            (await this.manager.readBranchesField(node, childKey)).index,
         ).toEqual(child.index);
         if (!child.isNull()) {
             expect(
-                (await this.readStructField(child, "parent")).index,
+                (await this.manager.readBranchesField(child, "parent")).index,
             ).toEqual(node.index);
         }
     }
@@ -154,7 +154,7 @@ class TreeTester extends StorageAccessor {
             expect(index).toBeLessThan(contents.length);
             const content = contents[index];
             const accessor = await this.manager.createNodeContentAccessor(node);
-            const bufferLength = await accessor.getField("bufferLength");
+            const bufferLength = await accessor.getBufferLength();
             const values = await accessor.getAllItems();
             expect(bufferLength).toEqual(content.bufferLength);
             expect(values).toEqual(content.values);

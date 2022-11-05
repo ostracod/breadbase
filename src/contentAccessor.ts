@@ -1,7 +1,7 @@
 
 import { defaultContentSize, TreeDirection } from "./constants.js";
 import { TailStructType } from "./dataType.js";
-import { TreeContent, stringAsciiCharsType } from "./builtTypes.js";
+import { TreeContent, treeContentType, asciiStringContentType } from "./builtTypes.js";
 import { AllocType } from "./constants.js";
 import { StoragePointer } from "./storagePointer.js";
 import { StorageAccessor } from "./storageAccessor.js";
@@ -9,7 +9,7 @@ import { HeapAllocator } from "./heapAllocator.js";
 import { TreeManager } from "./treeManager.js";
 
 export const contentTypeMap: Map<AllocType, TailStructType<TreeContent>> = new Map([
-    [AllocType.StringAsciiChars, stringAsciiCharsType],
+    [AllocType.AsciiStringContent, asciiStringContentType],
 ]);
 
 export class ContentAccessor<T = any> extends StorageAccessor {
@@ -53,6 +53,12 @@ export class ContentAccessor<T = any> extends StorageAccessor {
     
     getElementSize(): number {
         return this.tailStructType.elementType.getSize();
+    }
+    
+    async getBufferLength(): Promise<number> {
+        const allocSize = await this.getField("allocSize");
+        const elementSize = this.getElementSize();
+        return (allocSize - treeContentType.getSize()) / elementSize;
     }
     
     getDefaultBufferLength(): number {
@@ -156,7 +162,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         await this.writeStructField(parent, "treeContent", content);
         await this.heapAllocator.deleteAlloc(this.content);
         this.content = content;
-        this.fieldValues.bufferLength = length;
+        delete this.fieldValues.allocSize;
     }
     
     async shatter(inputValues?: T[]): Promise<void> {
@@ -183,7 +189,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
     }
     
     async insertItemsWithOverflow(index: number, valuesToInsert: T[]): Promise<void> {
-        const bufferLength = await this.getField("bufferLength");
+        const bufferLength = await this.getBufferLength();
         let targetCount: number;
         if (await this.isFinalNode()) {
             targetCount = bufferLength;
@@ -222,7 +228,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         if (nextParent === null) {
             return;
         }
-        const bufferLength = await this.getField("bufferLength");
+        const bufferLength = await this.getBufferLength();
         const itemCount = await this.getField("itemCount");
         const targetCount = Math.ceil(bufferLength / 2);
         const borrowCount = targetCount - itemCount;
@@ -234,7 +240,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
             await this.insertItems(itemCount, valuesToBorrow);
             return;
         }
-        const nextBufferLength = await nextAccessor.getField("bufferLength");
+        const nextBufferLength = await nextAccessor.getBufferLength();
         const nextTargetCount = Math.ceil(nextBufferLength / 2);
         const countAfterDeletion = nextItemCount - borrowCount;
         if (countAfterDeletion < nextTargetCount) {
