@@ -57,19 +57,15 @@ const typeDeclarationsData: DeclarationData[] = JSON.parse(
     fs.readFileSync(typesPath, "utf8"),
 );
 
-const pointerTypeNames = new Set<string>();
-
 const uncapitalize = (text: string): string => (
     text.charAt(0).toLowerCase() + text.substring(1, text.length)
 );
 
 const getTypeInstanceName = (typeName: string): string => uncapitalize(typeName) + "Type";
 
-const getPointerInstanceName = (typeName: string): string => uncapitalize(typeName);
-
 const getParamTypesCode = (paramTypes: ParamType[]): string => {
     if (paramTypes.length > 0) {
-        return `<${paramTypes.map((type) => type.getNestedCode() + " = any").join(", ")}>`;
+        return `<${paramTypes.map((type) => type.getNestedTypeCode() + " = any").join(", ")}>`;
     } else {
         return "";
     }
@@ -79,20 +75,20 @@ type ParamMap = Map<string, DataType>;
 
 abstract class DataType {
     
-    abstract getNestedCode(): string;
+    abstract getNestedTypeCode(): string;
     
-    abstract getInstanceCode(): string;
+    abstract getNestedInstanceCode(): string;
     
     abstract dereference(): LiteralType;
     
     abstract replaceParamTypes(paramMap: ParamMap): DataType;
     
-    getDeclarationCode(name: string, paramTypes: ParamType[]): string {
-        return `export type ${name}${getParamTypesCode(paramTypes)} = ${this.getNestedCode()};\n\nexport const ${getTypeInstanceName(name)} = ${this.getInstanceCode()};`;
+    getDeclarationTypeCode(name: string, paramTypes: ParamType[]): string {
+        return `export type ${name}${getParamTypesCode(paramTypes)} = ${this.getNestedTypeCode()};`;
     }
     
-    getPointerInstanceCode(): string {
-        return `new StoragePointerType(${this.getInstanceCode()})`;
+    getDeclarationInstanceCode(name: string, paramTypes: ParamType[]): string {
+        return this.getNestedInstanceCode();
     }
 }
 
@@ -104,11 +100,11 @@ class ParamType extends DataType {
         this.name = name;
     }
     
-    getNestedCode(): string {
+    getNestedTypeCode(): string {
         return this.name;
     }
     
-    getInstanceCode(): string {
+    getNestedInstanceCode(): string {
         return `new ParamType("${this.name}")`;
     }
     
@@ -163,30 +159,24 @@ class ReferenceType extends InitDataType {
         }
     }
     
-    getNestedCode(): string {
+    getNestedTypeCode(): string {
         if (this.paramReplacements === null) {
             return this.name;
         } else {
-            return `${this.name}<${this.paramReplacements.map((type) => type.getNestedCode()).join(", ")}>`;
+            return `${this.name}<${this.paramReplacements.map((type) => type.getNestedTypeCode()).join(", ")}>`;
         }
     }
     
-    getInstanceCode(): string {
-        const instanceName = getTypeInstanceName(this.name);
-        const resultText = [`new ReferenceType<${this.name}>("${instanceName}"`];
+    getNestedInstanceCode(): string {
+        const resultText = [`new ReferenceType<${this.name}>("${this.name}"`];
         const declaration = this.getDeclaration();
         if (declaration.paramTypes.length > 0) {
             const paramReplacements = this.getNonNullReplacements();
-            const codeList = paramReplacements.map((paramReplacement) => paramReplacement.getInstanceCode());
+            const codeList = paramReplacements.map((paramReplacement) => paramReplacement.getNestedInstanceCode());
             resultText.push(`, [${codeList.join(", ")}]`);
         }
         resultText.push(")");
         return resultText.join("");
-    }
-    
-    getPointerInstanceCode(): string {
-        pointerTypeNames.add(this.name);
-        return "pointerTypes." + getPointerInstanceName(this.name);
     }
     
     dereference(): LiteralType {
@@ -233,11 +223,11 @@ abstract class LiteralType extends InitDataType {
 
 class AnyType extends LiteralType {
     
-    getNestedCode(): string {
+    getNestedTypeCode(): string {
         return "any";
     }
     
-    getInstanceCode(): string {
+    getNestedInstanceCode(): string {
         return "anyType";
     }
 }
@@ -246,11 +236,11 @@ const anyType = new AnyType();
 
 class BoolType extends LiteralType {
     
-    getNestedCode(): string {
+    getNestedTypeCode(): string {
         return "boolean";
     }
     
-    getInstanceCode(): string {
+    getNestedInstanceCode(): string {
         return "boolType";
     }
 }
@@ -270,11 +260,11 @@ class IntType extends LiteralType {
         this.init(data.size, (typeof enumType === "undefined") ? null : enumType);
     }
     
-    getNestedCode(): string {
+    getNestedTypeCode(): string {
         return (this.enumType === null) ? "number" : this.enumType;
     }
     
-    getInstanceCode(): string {
+    getNestedInstanceCode(): string {
         return `new IntType(${this.size})`;
     }
 }
@@ -294,12 +284,12 @@ class ArrayType extends LiteralType {
         this.init(elementType, data.length);
     }
     
-    getNestedCode(): string {
-        return `${this.elementType.getNestedCode()}[]`;
+    getNestedTypeCode(): string {
+        return `${this.elementType.getNestedTypeCode()}[]`;
     }
     
-    getInstanceCode(): string {
-        return `new ArrayType(${this.elementType.getInstanceCode()}, ${this.length})`;
+    getNestedInstanceCode(): string {
+        return `new ArrayType(${this.elementType.getNestedInstanceCode()}, ${this.length})`;
     }
     
     replaceParamTypes(paramMap: ParamMap): DataType {
@@ -323,12 +313,12 @@ class StoragePointerType extends LiteralType {
         this.init(elementType);
     }
     
-    getNestedCode(): string {
-        return `StoragePointer<${this.elementType.getNestedCode()}>`;
+    getNestedTypeCode(): string {
+        return `StoragePointer<${this.elementType.getNestedTypeCode()}>`;
     }
     
-    getInstanceCode(): string {
-        return this.elementType.getPointerInstanceCode();
+    getNestedInstanceCode(): string {
+        return `new StoragePointerType(${this.elementType.getNestedInstanceCode()})`;
     }
     
     replaceParamTypes(paramMap: ParamMap): DataType {
@@ -341,7 +331,7 @@ class StoragePointerType extends LiteralType {
 
 abstract class Field {
     
-    abstract getNestedCode(): string;
+    abstract getNestedTypeCode(): string;
 }
 
 class MemberField extends Field {
@@ -354,12 +344,12 @@ class MemberField extends Field {
         this.type = type;
     }
     
-    getNestedCode(): string {
-        return `${this.name}: ${this.type.getNestedCode()}`;
+    getNestedTypeCode(): string {
+        return `${this.name}: ${this.type.getNestedTypeCode()}`;
     }
     
-    getInstanceCode(): string {
-        return `{ name: "${this.name}", type: ${this.type.getInstanceCode()} }`;
+    getNestedInstanceCode(): string {
+        return `{ name: "${this.name}", type: ${this.type.getNestedInstanceCode()} }`;
     }
     
     replaceParamTypes(paramMap: ParamMap): MemberField {
@@ -371,7 +361,7 @@ class MemberField extends Field {
 
 class FlavorField extends Field {
     
-    getNestedCode(): string {
+    getNestedTypeCode(): string {
         return "_flavor?: { name: \"Struct\" }";
     }
 }
@@ -384,8 +374,8 @@ class TailField extends Field {
         this.elementType = elementType;
     }
     
-    getNestedCode(): string {
-        return `_tail: ${this.elementType.getNestedCode()}[]`;
+    getNestedTypeCode(): string {
+        return `_tail: ${this.elementType.getNestedTypeCode()}[]`;
     }
 }
 
@@ -447,35 +437,42 @@ class StructType extends LiteralType {
         if (this.superType === null) {
             return [];
         } else {
-            return [this.superType.getInstanceCode()];
+            return [this.superType.getNestedInstanceCode()];
         }
     }
     
-    getDeclarationCode(name: string, paramTypes: ParamType[]): string {
+    getDeclarationTypeCode(name: string, paramTypes: ParamType[]): string {
         const resultText: string[] = [];
         let extensionText = this.getInterfaceName();
         if (this.superType !== null) {
-            extensionText += ", " + this.superType.getNestedCode();
+            extensionText += ", " + this.superType.getNestedTypeCode();
         }
         resultText.push(`export interface ${name}${getParamTypesCode(paramTypes)} extends ${extensionText} {`);
         for (const field of this.subTypeFields) {
-            resultText.push(`    ${field.getNestedCode()};`);
+            resultText.push(`    ${field.getNestedTypeCode()};`);
         }
-        resultText.push(`}\n\nexport const ${getTypeInstanceName(name)} = new ${this.getClassName()}<${name}>([`);
-        for (const field of this.subTypeFields) {
-            resultText.push(`    ${field.getInstanceCode()},`);
-        }
-        resultText.push(["]", ...this.getConstructorArgs()].join(", ") + ");");
+        resultText.push("}");
         return resultText.join("\n");
     }
     
-    getNestedCode(): string {
-        const fieldsCode = this.allFields.map((field) => field.getNestedCode());
+    getDeclarationInstanceCode(name: string, paramTypes: ParamType[]): string {
+        const resultText: string[] = [`new ${this.getClassName()}<${name}>([`];
+        for (const field of this.subTypeFields) {
+            resultText.push(`    ${field.getNestedInstanceCode()},`);
+        }
+        resultText.push(["]", ...this.getConstructorArgs()].join(", ") + ")");
+        return resultText.join("\n");
+    }
+    
+    getNestedTypeCode(): string {
+        const fieldsCode = this.allFields.map((field) => field.getNestedTypeCode());
         return `{ ${fieldsCode.join(", ")} }`;
     }
     
-    getInstanceCode(): string {
-        const fieldCodeList = this.subTypeFields.map((field) => field.getInstanceCode());
+    getNestedInstanceCode(): string {
+        const fieldCodeList = this.subTypeFields.map(
+            (field) => field.getNestedInstanceCode(),
+        );
         const resultText = [`new ${this.getClassName()}([${fieldCodeList.join(", ")}`];
         const terms = ["]", ...this.getConstructorArgs()];
         resultText.push(`${terms.join(", ")})`);
@@ -538,7 +535,7 @@ class TailStructType extends StructType {
     }
     
     getInterfaceName(): string {
-        return `TailStruct<${this.elementType.getNestedCode()}>`;
+        return `TailStruct<${this.elementType.getNestedTypeCode()}>`;
     }
     
     getClassName(): string {
@@ -546,7 +543,7 @@ class TailStructType extends StructType {
     }
     
     getConstructorArgs(): string[] {
-        return [this.elementType.getInstanceCode(), ...super.getConstructorArgs()];
+        return [this.elementType.getNestedInstanceCode(), ...super.getConstructorArgs()];
     }
     
     replaceParamTypes(paramMap: ParamMap): DataType {
@@ -590,13 +587,15 @@ class TypeDeclaration {
     }
     
     getCode(): string {
-        const resultText = [this.type.getDeclarationCode(this.name, this.paramTypes)];
+        const typeCode = this.type.getDeclarationTypeCode(this.name, this.paramTypes);
+        const instanceCode = this.type.getDeclarationInstanceCode(this.name, this.paramTypes);
+        const resultText = [`${typeCode}\n\nexport const ${getTypeInstanceName(this.name)} = addTypeDeclaration("${this.name}", ${instanceCode}`];
         if (this.paramTypes.length > 0) {
-            const instanceName = getTypeInstanceName(this.name);
             const namesCode = this.paramTypes.map((paramType) => `"${paramType.name}"`);
-            resultText.push(`${instanceName}.setParamTypeNames([${namesCode.join(", ")}]);`);
+            resultText.push(`, [${namesCode.join(", ")}]`);
         }
-        return resultText.join("\n") + "\n";
+        resultText.push(");\n");
+        return resultText.join("");
     }
 }
 
@@ -629,29 +628,16 @@ const convertDataToType = (scope: Scope, inputData: TypeData): DataType => {
     return output;
 };
 
-const resultText = ["/* eslint-disable @typescript-eslint/no-unused-vars */\n\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount, AllocType } from \"./constants.js\";\nimport { ParamType, ReferenceType, anyType, boolType, IntType, StoragePointerType, ArrayType, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
+const resultText = ["/* eslint-disable @typescript-eslint/no-unused-vars */\n\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount, AllocType } from \"./constants.js\";\nimport { addTypeDeclaration, ParamType, ReferenceType, anyType, boolType, IntType, StoragePointerType, ArrayType, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
 
 const typeDeclarationMap = new Map<string, TypeDeclaration>();
 for (const data of typeDeclarationsData) {
     const declaration = new TypeDeclaration(data);
     typeDeclarationMap.set(declaration.name, declaration);
 }
-
-const declarationsText: string[] = [];
 typeDeclarationMap.forEach((declaration) => {
-    declarationsText.push(declaration.getCode());
+    resultText.push(declaration.getCode());
 });
-
-resultText.push("const pointerTypes = {");
-for (const name of pointerTypeNames) {
-    resultText.push(`    ${getPointerInstanceName(name)}: new StoragePointerType<${name}>(),`);
-}
-resultText.push("};\n");
-resultText.push(declarationsText.join("\n"));
-for (const name of pointerTypeNames) {
-    resultText.push(`pointerTypes.${getPointerInstanceName(name)}.elementType = ${getTypeInstanceName(name)};`);
-}
-resultText.push("\n\n");
 
 const destinationPath = pathUtils.join(directoryPath, "src", "builtTypes.ts");
 fs.writeFileSync(destinationPath, resultText.join("\n"));

@@ -3,11 +3,7 @@ import { ParamMap, Struct, TailStruct, TailStructElement, Field, ResolvedField }
 import { storagePointerSize } from "./constants.js";
 import { StoragePointer } from "./storagePointer.js";
 
-let namedTypes: { [name: string]: DataType };
-
-export const setNamedTypes = (inputNamedTypes: { [name: string]: DataType }): void => {
-    namedTypes = inputNamedTypes;
-};
+const typeDeclarationMap = new Map<string, TypeDeclaration>();
 
 export abstract class DataType<T = any> {
     paramTypeNames: string[];
@@ -70,15 +66,16 @@ export class ReferenceType<T> extends DataType<T> {
         super();
         this.name = name;
         this.paramReplacements = paramReplacements;
+        this.dereferencedType = null;
     }
     
-    getNamedType(): DataType {
-        return namedTypes[this.name];
+    getDeclaration(): TypeDeclaration {
+        return typeDeclarationMap.get(this.name);
     }
     
     getNonNullReplacements(): DataType[] {
         if (this.paramReplacements === null) {
-            return this.getNamedType().paramTypeNames.map((name) => anyType);
+            return this.getDeclaration().paramTypeNames.map((name) => anyType);
         } else {
             return this.paramReplacements;
         }
@@ -88,10 +85,11 @@ export class ReferenceType<T> extends DataType<T> {
         if (this.dereferencedType !== null) {
             return this.dereferencedType;
         }
-        let type = namedTypes[this.name];
+        const declaration = this.getDeclaration();
+        let { type } = declaration;
         const paramMap = new Map<string, DataType>();
         this.getNonNullReplacements().forEach((paramReplacement, index) => {
-            const name = type.paramTypeNames[index];
+            const name = declaration.paramTypeNames[index];
             paramMap.set(name, paramReplacement);
         });
         type = type.replaceParamTypes(paramMap);
@@ -221,20 +219,33 @@ export class ArrayType<T> extends LiteralType<T[]> {
 }
 
 export class StructType<T extends Struct> extends LiteralType<T> {
-    fieldMap: Map<string, ResolvedField>;
-    size: number;
+    subTypeFields: Field[];
+    superType: DataType<Partial<T>> | null;
+    fieldMap: Map<string, ResolvedField> | null;
+    size: number | null;
     
-    constructor(fields: Field[], superType?: DataType<Partial<T>>) {
+    constructor(fields: Field[], superType: DataType<Partial<T>> | null = null) {
         super();
+        this.subTypeFields = fields;
+        this.superType = superType;
+        // We delay initialization of the field map in case superType is a ReferenceType.
+        this.fieldMap = null;
+        this.size = null;
+    }
+    
+    initFieldsIfMissing(): void {
+        if (this.fieldMap !== null) {
+            return;
+        }
         this.fieldMap = new Map();
         this.size = 0;
-        if (typeof superType !== "undefined") {
-            const structType = superType.dereference() as StructType<Partial<T>>;
-            structType.fieldMap.forEach((field) => {
+        if (this.superType !== null) {
+            const structType = this.superType.dereference() as StructType<Partial<T>>;
+            structType.getFieldMap().forEach((field) => {
                 this.addField(field);
             });
         }
-        for (const field of fields) {
+        for (const field of this.subTypeFields) {
             this.addField(field);
         }
     }
@@ -245,26 +256,32 @@ export class StructType<T extends Struct> extends LiteralType<T> {
         this.size += resolvedField.type.getSize();
     }
     
+    getFieldMap(): Map<string, ResolvedField> {
+        this.initFieldsIfMissing();
+        return this.fieldMap;
+    }
+    
     getSize(): number {
+        this.initFieldsIfMissing();
         return this.size;
     }
     
     read(data: Buffer, offset: number): T {
         const output: any = {};
-        this.fieldMap.forEach((field) => {
+        this.getFieldMap().forEach((field) => {
             output[field.name] = field.type.read(data, offset + field.offset);
         });
         return output as T;
     }
     
     write(data: Buffer, offset: number, value: T): void {
-        this.fieldMap.forEach((field) => {
+        this.getFieldMap().forEach((field) => {
             field.type.write(data, offset + field.offset, (value as any)[field.name]);
         });
     }
     
     getField<T2 extends string & (keyof T)>(name: T2): ResolvedField<T[T2]> {
-        return this.fieldMap.get(name) as ResolvedField<T[T2]>;
+        return this.getFieldMap().get(name) as ResolvedField<T[T2]>;
     }
 }
 
@@ -318,5 +335,27 @@ export class TailStructType<T extends TailStruct = TailStruct> extends StructTyp
         }
     }
 }
+
+export class TypeDeclaration {
+    name: string;
+    type: DataType;
+    paramTypeNames: string[];
+    
+    constructor(name: string, type: DataType, paramTypeNames: string[]) {
+        this.name = name;
+        this.type = type;
+        this.paramTypeNames = paramTypeNames;
+    }
+}
+
+export const addTypeDeclaration = <T extends DataType>(
+    name: string,
+    type: T,
+    paramTypeNames: string[] = [],
+): T => {
+    const declaration = new TypeDeclaration(name, type, paramTypeNames);
+    typeDeclarationMap.set(declaration.name, declaration);
+    return type;
+};
 
 
