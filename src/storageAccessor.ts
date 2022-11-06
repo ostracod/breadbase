@@ -20,7 +20,7 @@ export class StorageAccessor {
         pointer: StoragePointer<T>,
         length: number,
     ): Promise<T> {
-        const tailStructType = pointer.type as TailStructType<T>;
+        const tailStructType = pointer.type.dereference() as TailStructType<T>;
         const size = tailStructType.getSizeWithTail(length);
         const data = await this.storage.read(pointer.index, size);
         return tailStructType.readWithTail(data, 0, length);

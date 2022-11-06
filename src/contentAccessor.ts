@@ -1,7 +1,7 @@
 
 import { defaultContentSize, TreeDirection } from "./constants.js";
 import { TailStructType } from "./dataType.js";
-import { TreeContent, treeContentType, asciiStringContentType } from "./builtTypes.js";
+import { allocType, TreeContent, treeContentType, asciiStringContentType } from "./builtTypes.js";
 import { AllocType } from "./constants.js";
 import { StoragePointer } from "./storagePointer.js";
 import { StorageAccessor } from "./storageAccessor.js";
@@ -30,8 +30,8 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         this.content = content;
         this.fieldValues = {};
         this.items = [];
-        const allocType = await this.getField("type");
-        this.tailStructType = contentTypeMap.get(allocType) as TailStructType<TreeContent<T>>;
+        const typeNumber = await this.getField("type");
+        this.tailStructType = contentTypeMap.get(typeNumber) as TailStructType<TreeContent<T>>;
         this.content = this.content.convert(this.tailStructType);
     }
     
@@ -61,7 +61,8 @@ export class ContentAccessor<T = any> extends StorageAccessor {
     async getBufferLength(): Promise<number> {
         const allocSize = await this.getField("allocSize");
         const elementSize = this.getElementSize();
-        return (allocSize - treeContentType.getSize()) / elementSize;
+        const bufferSize = allocSize - (treeContentType.getSize() - allocType.getSize());
+        return bufferSize / elementSize;
     }
     
     getDefaultBufferLength(): number {
@@ -170,7 +171,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
     
     async shatter(inputValues?: T[]): Promise<void> {
         const parent = await this.getField("parent");
-        const allocType = await this.getField("type");
+        const typeNumber = await this.getField("type");
         let values: T[] = [];
         if (typeof inputValues === "undefined") {
             values = await this.getAllItems();
@@ -182,7 +183,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
             const endIndex = Math.min(startIndex + defaultLength, values.length);
             const subValues = values.slice(startIndex, endIndex);
             const node = await this.manager.createTreeNode(
-                allocType,
+                typeNumber,
                 defaultLength,
                 subValues,
             );

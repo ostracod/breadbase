@@ -29,7 +29,7 @@ export const getArrayElementPointer = <T>(
     pointer: StoragePointer<T[]>,
     index: number,
 ): StoragePointer<T> => {
-    const { elementType } = pointer.type as ArrayType<T>;
+    const { elementType } = pointer.type.dereference() as ArrayType<T>;
     const elementSize = elementType.getSize();
     return new StoragePointer(pointer.index + index * elementSize, elementType);
 };
@@ -38,7 +38,7 @@ export const getStructFieldPointer = <T1 extends Struct, T2 extends string & (ke
     pointer: StoragePointer<T1>,
     name: T2,
 ): StoragePointer<T1[T2]> => {
-    const structType = pointer.type as StructType<T1>;
+    const structType = pointer.type.dereference() as StructType<T1>;
     const field = structType.getField(name);
     return new StoragePointer(pointer.index + field.offset, field.type);
 };
@@ -47,7 +47,7 @@ export const getTailElementPointer = <T>(
     pointer: StoragePointer<TailStruct<T>>,
     index: number,
 ): StoragePointer<T> => {
-    const tailStructType = pointer.type as TailStructType<TailStruct<T>>;
+    const tailStructType = pointer.type.dereference() as TailStructType<TailStruct<T>>;
     const tailIndex = tailStructType.getTailOffset(pointer.index);
     const { elementType } = tailStructType;
     const elementSize = elementType.getSize();

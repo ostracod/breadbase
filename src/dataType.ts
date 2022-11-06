@@ -15,7 +15,7 @@ export abstract class DataType<T = any> {
     abstract replaceParamTypes(paramMap: ParamMap): DataType<T>;
     
     getErrorText(verb: string): string {
-        return `Cannot "${verb}" ${this.constructor.name}.`;
+        return `Cannot ${verb} ${this.constructor.name}.`;
     }
     
     getSize(): number {
@@ -32,10 +32,6 @@ export abstract class DataType<T = any> {
     
     dereference(): LiteralType<T> {
         throw new Error(this.getErrorText("dereference"));
-    }
-    
-    setParamTypeNames(names: string[]): void {
-        this.paramTypeNames = names;
     }
 }
 
@@ -67,6 +63,18 @@ export class ReferenceType<T> extends DataType<T> {
         this.name = name;
         this.paramReplacements = paramReplacements;
         this.dereferencedType = null;
+    }
+    
+    getSize(): number {
+        return this.dereference().getSize();
+    }
+    
+    read(data: Buffer, offset: number): T {
+        return this.dereference().read(data, offset);
+    }
+    
+    write(data: Buffer, offset: number, value: T): void {
+        return this.dereference().write(data, offset, value);
     }
     
     getDeclaration(): TypeDeclaration {
@@ -185,6 +193,11 @@ export class StoragePointerType<T> extends LiteralType<StoragePointer<T>> {
     write(data: Buffer, offset: number, value: StoragePointer<T>): void {
         data.writeIntLE(value.index, offset, storagePointerSize);
     }
+    
+    replaceParamTypes(paramMap: ParamMap): DataType<StoragePointer<T>> {
+        const elementType = this.elementType.replaceParamTypes(paramMap);
+        return new StoragePointerType(elementType);
+    }
 }
 
 export class ArrayType<T> extends LiteralType<T[]> {
@@ -215,6 +228,11 @@ export class ArrayType<T> extends LiteralType<T[]> {
         for (let index = 0; index < this.length; index++) {
             this.elementType.write(data, offset + index * elementSize, value[index]);
         }
+    }
+    
+    replaceParamTypes(paramMap: ParamMap): DataType<T[]> {
+        const elementType = this.elementType.replaceParamTypes(paramMap);
+        return new ArrayType(elementType, this.length);
     }
 }
 
@@ -283,6 +301,27 @@ export class StructType<T extends Struct> extends LiteralType<T> {
     getField<T2 extends string & (keyof T)>(name: T2): ResolvedField<T[T2]> {
         return this.getFieldMap().get(name) as ResolvedField<T[T2]>;
     }
+    
+    replaceParamsHelper(
+        paramMap: ParamMap,
+    ): { fields: Field[], superType: DataType<Partial<T>> } {
+        const fields = this.subTypeFields.map((field) => ({
+            name: field.name,
+            type: field.type.replaceParamTypes(paramMap),
+        }));
+        let superType: DataType<Partial<T>> | null;
+        if (this.superType === null) {
+            superType = null;
+        } else {
+            superType = this.superType.replaceParamTypes(paramMap);
+        }
+        return { fields, superType };
+    }
+    
+    replaceParamTypes(paramMap: ParamMap): DataType<T> {
+        const { fields, superType } = this.replaceParamsHelper(paramMap);
+        return new StructType(fields, superType);
+    }
 }
 
 export class TailStructType<T extends TailStruct = TailStruct> extends StructType<T> {
@@ -333,6 +372,12 @@ export class TailStructType<T extends TailStruct = TailStruct> extends StructTyp
         for (let index = 0; index < tail.length; index++) {
             this.elementType.write(data, tailOffset + index * elementSize, tail[index]);
         }
+    }
+    
+    replaceParamTypes(paramMap: ParamMap): DataType<T> {
+        const { fields, superType } = this.replaceParamsHelper(paramMap);
+        const elementType = this.elementType.replaceParamTypes(paramMap);
+        return new TailStructType(fields, elementType, superType);
     }
 }
 

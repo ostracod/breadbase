@@ -1,6 +1,6 @@
 
 import { spanDegreeAmount, AllocType } from "../src/constants.js";
-import { storageHeaderType, spanType, emptySpanType, allocType } from "../src/builtTypes.js";
+import { storageHeaderType, spanType, emptySpanType } from "../src/builtTypes.js";
 import { MemoryStorage } from "../src/storage.js";
 import { StoragePointer, createNullPointer } from "../src/storagePointer.js";
 import { HeapAllocator } from "../src/heapAllocator.js";
@@ -8,6 +8,23 @@ import { HeapAllocator } from "../src/heapAllocator.js";
 const storageHeaderSize = storageHeaderType.getSize();
 const nullSpanPointer = createNullPointer(spanType);
 const nullEmptySpanPointer = createNullPointer(emptySpanType);
+
+const assertStructsAreEqual = (struct1: any, struct2: any) => {
+    for (const key in struct1) {
+        expect(key in struct2).toEqual(true);
+        const value1 = struct1[key];
+        const value2 = struct2[key];
+        if (value1 instanceof StoragePointer) {
+            expect(value2 instanceof StoragePointer).toEqual(true);
+            expect(value1.index === value2.index).toEqual(true);
+        } else {
+            expect(value1 === value2).toEqual(true);
+        }
+    }
+    for (const key in struct2) {
+        expect(key in struct1).toEqual(true);
+    }
+};
 
 describe("HeapAllocator", () => {
     describe("createEmptyHeap", () => {
@@ -29,14 +46,14 @@ describe("HeapAllocator", () => {
             const allocator = new HeapAllocator(storage);
             await allocator.createEmptyHeap();
             const allocPointer = await allocator.createAlloc(AllocType.Node, 50);
-            expect(allocPointer).toEqual(new StoragePointer(storageHeaderSize, allocType));
+            expect(allocPointer.index).toEqual(storageHeaderSize);
             const finalSpanPointer = new StoragePointer(
                 storageHeaderSize + 73,
                 emptySpanType,
             );
-            expect(allocator.finalSpan).toEqual(finalSpanPointer);
+            expect(allocator.finalSpan.index).toEqual(finalSpanPointer.index);
             const alloc = await allocator.read(allocPointer);
-            expect(alloc).toEqual({
+            assertStructsAreEqual(alloc, {
                 previousByNeighbor: nullSpanPointer,
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 73, spanType),
                 spanSize: 55,
@@ -46,7 +63,7 @@ describe("HeapAllocator", () => {
                 allocSize: 50,
             });
             const finalSpan = await allocator.read(finalSpanPointer);
-            expect(finalSpan).toEqual({
+            assertStructsAreEqual(finalSpan, {
                 previousByNeighbor: new StoragePointer(storageHeaderSize, spanType),
                 nextByNeighbor: nullSpanPointer,
                 spanSize: -1,
@@ -65,9 +82,9 @@ describe("HeapAllocator", () => {
             await allocator.createAlloc(AllocType.Node, 50);
             await allocator.deleteAlloc(allocPointer1);
             const allocPointer3 = await allocator.createAlloc(AllocType.Node, 50);
-            expect(allocPointer3).toEqual(new StoragePointer(storageHeaderSize, allocType));
+            expect(allocPointer3.index).toEqual(storageHeaderSize);
             const alloc3 = await allocator.read(allocPointer3);
-            expect(alloc3).toEqual({
+            assertStructsAreEqual(alloc3, {
                 previousByNeighbor: nullSpanPointer,
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 73, spanType),
                 spanSize: 55,
@@ -81,7 +98,7 @@ describe("HeapAllocator", () => {
                 emptySpanType,
             );
             const emptySpan = await allocator.read(emptySpanPointer);
-            expect(emptySpan).toEqual({
+            assertStructsAreEqual(emptySpan, {
                 previousByNeighbor: new StoragePointer(storageHeaderSize, spanType),
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 223, spanType),
                 spanSize: 132,
@@ -90,8 +107,8 @@ describe("HeapAllocator", () => {
                 previousByDegree: nullEmptySpanPointer,
                 nextByDegree: nullEmptySpanPointer,
             });
-            expect(allocator.emptySpansByDegree[8]).toEqual(nullEmptySpanPointer);
-            expect(allocator.emptySpansByDegree[6]).toEqual(emptySpanPointer);
+            expect(allocator.emptySpansByDegree[8].index).toEqual(0);
+            expect(allocator.emptySpansByDegree[6].index).toEqual(emptySpanPointer.index);
         });
         
         it("does not split non-final span", async () => {
@@ -102,9 +119,9 @@ describe("HeapAllocator", () => {
             await allocator.createAlloc(AllocType.Node, 50);
             await allocator.deleteAlloc(allocPointer1);
             const allocPointer3 = await allocator.createAlloc(AllocType.Node, 50);
-            expect(allocPointer3).toEqual(new StoragePointer(storageHeaderSize, allocType));
+            expect(allocPointer3.index).toEqual(storageHeaderSize);
             const alloc3 = await allocator.read(allocPointer3);
-            expect(alloc3).toEqual({
+            assertStructsAreEqual(alloc3, {
                 previousByNeighbor: nullSpanPointer,
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 88, spanType),
                 spanSize: 70,
@@ -122,11 +139,9 @@ describe("HeapAllocator", () => {
             await allocator.createAlloc(AllocType.Node, 50);
             await allocator.deleteAlloc(allocPointer1);
             const allocPointer3 = await allocator.createAlloc(AllocType.Node, 70);
-            expect(allocPointer3).toEqual(
-                new StoragePointer(storageHeaderSize + 146, allocType),
-            );
+            expect(allocPointer3.index).toEqual(storageHeaderSize + 146);
             const alloc3 = await allocator.read(allocPointer3);
-            expect(alloc3).toEqual({
+            assertStructsAreEqual(alloc3, {
                 previousByNeighbor: new StoragePointer(storageHeaderSize + 73, spanType),
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 239, spanType),
                 spanSize: 75,
@@ -146,9 +161,9 @@ describe("HeapAllocator", () => {
             const allocPointer = await allocator.createAlloc(AllocType.Node, 50);
             await allocator.deleteAlloc(allocPointer);
             const finalSpanPointer = new StoragePointer(storageHeaderSize, emptySpanType);
-            expect(allocator.finalSpan).toEqual(finalSpanPointer);
+            expect(allocator.finalSpan.index).toEqual(finalSpanPointer.index);
             const finalSpan = await allocator.read(finalSpanPointer);
-            expect(finalSpan).toEqual({
+            assertStructsAreEqual(finalSpan, {
                 previousByNeighbor: nullSpanPointer,
                 nextByNeighbor: nullSpanPointer,
                 spanSize: -1,
@@ -168,7 +183,7 @@ describe("HeapAllocator", () => {
             await allocator.deleteAlloc(allocPointer1);
             const emptySpanPointer = new StoragePointer(storageHeaderSize, emptySpanType);
             const emptySpan = await allocator.read(emptySpanPointer);
-            expect(emptySpan).toEqual({
+            assertStructsAreEqual(emptySpan, {
                 previousByNeighbor: nullSpanPointer,
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 223, spanType),
                 spanSize: 205,
@@ -177,7 +192,7 @@ describe("HeapAllocator", () => {
                 previousByDegree: nullEmptySpanPointer,
                 nextByDegree: nullEmptySpanPointer,
             });
-            expect(allocator.emptySpansByDegree[8]).toEqual(emptySpanPointer);
+            expect(allocator.emptySpansByDegree[8].index).toEqual(emptySpanPointer.index);
         });
         
         it("deletes alloc between two allocs", async () => {
@@ -193,7 +208,7 @@ describe("HeapAllocator", () => {
             const emptySpan = await allocator.read(
                 new StoragePointer(storageHeaderSize + 146, emptySpanType),
             );
-            expect(emptySpan).toEqual({
+            assertStructsAreEqual(emptySpan, {
                 previousByNeighbor: new StoragePointer(storageHeaderSize + 73, spanType),
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 219, spanType),
                 spanSize: 55,
@@ -218,7 +233,7 @@ describe("HeapAllocator", () => {
             const emptySpan = await allocator.read(
                 new StoragePointer(storageHeaderSize + 73, emptySpanType),
             );
-            expect(emptySpan).toEqual({
+            assertStructsAreEqual(emptySpan, {
                 previousByNeighbor: new StoragePointer(storageHeaderSize, spanType),
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 219, spanType),
                 spanSize: 128,
@@ -228,7 +243,7 @@ describe("HeapAllocator", () => {
                 nextByDegree: nullEmptySpanPointer,
             });
             const alloc3 = await allocator.read(allocPointer3);
-            expect(alloc3).toEqual({
+            assertStructsAreEqual(alloc3, {
                 previousByNeighbor: new StoragePointer(storageHeaderSize + 73, spanType),
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 292, spanType),
                 spanSize: 55,
@@ -253,7 +268,7 @@ describe("HeapAllocator", () => {
             const emptySpan = await allocator.read(
                 new StoragePointer(storageHeaderSize + 146, emptySpanType),
             );
-            expect(emptySpan).toEqual({
+            assertStructsAreEqual(emptySpan, {
                 previousByNeighbor: new StoragePointer(storageHeaderSize + 73, spanType),
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 292, spanType),
                 spanSize: 128,
@@ -279,7 +294,7 @@ describe("HeapAllocator", () => {
             const emptySpan = await allocator.read(
                 new StoragePointer(storageHeaderSize + 73, emptySpanType),
             );
-            expect(emptySpan).toEqual({
+            assertStructsAreEqual(emptySpan, {
                 previousByNeighbor: new StoragePointer(storageHeaderSize, spanType),
                 nextByNeighbor: new StoragePointer(storageHeaderSize + 292, spanType),
                 spanSize: 201,

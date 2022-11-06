@@ -628,7 +628,7 @@ const convertDataToType = (scope: Scope, inputData: TypeData): DataType => {
     return output;
 };
 
-const resultText = ["/* eslint-disable @typescript-eslint/no-unused-vars */\n\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount, AllocType } from \"./constants.js\";\nimport { addTypeDeclaration, ParamType, ReferenceType, anyType, boolType, IntType, StoragePointerType, ArrayType, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
+const resultText = ["\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount, AllocType } from \"./constants.js\";\nimport { addTypeDeclaration, ParamType, ReferenceType, anyType, boolType, IntType, StoragePointerType, ArrayType, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
 
 const typeDeclarationMap = new Map<string, TypeDeclaration>();
 for (const data of typeDeclarationsData) {
@@ -638,6 +638,7 @@ for (const data of typeDeclarationsData) {
 typeDeclarationMap.forEach((declaration) => {
     resultText.push(declaration.getCode());
 });
+resultText.push("\n");
 
 const destinationPath = pathUtils.join(directoryPath, "src", "builtTypes.ts");
 fs.writeFileSync(destinationPath, resultText.join("\n"));
