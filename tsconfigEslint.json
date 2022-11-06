@@ -3,7 +3,6 @@
     "include": [
         "src/**/*.ts",
         "tests/**/*.ts",
-        "buildTypes.ts",
         "jest.config.ts"
     ],
     "exclude": [

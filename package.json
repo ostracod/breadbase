@@ -5,7 +5,7 @@
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "scripts": {
-        "prebuild": "tsc --project tsconfigPrebuild.json && node ./buildTypes.js",
+        "prebuild": "tsc --project tsconfigPrebuild.json && node ./distPrebuild/buildTypes.js",
         "build": "npm run prebuild && tsc",
         "postinstall": "npm run build",
         "test": "jest tests",

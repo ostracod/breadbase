@@ -1,10 +1,11 @@
 {
     "extends": "./tsconfigBase.json",
     "compilerOptions": {
-        "outDir": "."
+        "outDir": "distPrebuild"
     },
     "include": [
-        "buildTypes.ts"
+        "src/buildTypes.ts",
+        "src/baseTypes.ts"
     ],
     "exclude": [
         "node_modules"

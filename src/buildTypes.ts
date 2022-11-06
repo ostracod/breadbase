@@ -52,7 +52,7 @@ interface DeclarationData {
 }
 
 const directoryPath = pathUtils.dirname(fileURLToPath(import.meta.url));
-const typesPath = pathUtils.join(directoryPath, "types.json");
+const typesPath = pathUtils.join(directoryPath, "..", "src", "types.json");
 const typeDeclarationsData: DeclarationData[] = JSON.parse(
     fs.readFileSync(typesPath, "utf8"),
 );
@@ -358,7 +358,6 @@ class MemberField extends Field {
     }
 }
 
-
 class FlavorField extends Field {
     
     getNestedTypeCode(): string {
@@ -640,7 +639,7 @@ typeDeclarationMap.forEach((declaration) => {
 });
 resultText.push("\n");
 
-const destinationPath = pathUtils.join(directoryPath, "src", "builtTypes.ts");
+const destinationPath = pathUtils.join(directoryPath, "..", "src", "builtTypes.ts");
 fs.writeFileSync(destinationPath, resultText.join("\n"));
 
 
