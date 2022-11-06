@@ -1,26 +1,135 @@
 
-import { DataType, Struct, TailStruct, TailStructElement, Field, ResolvedField } from "./internalTypes.js";
+import { ParamMap, Struct, TailStruct, TailStructElement, Field, ResolvedField } from "./internalTypes.js";
 import { storagePointerSize } from "./constants.js";
 import { StoragePointer } from "./storagePointer.js";
 
-export class AnyType implements DataType<any> {
+let namedTypes: { [name: string]: DataType };
+
+export const setNamedTypes = (inputNamedTypes: { [name: string]: DataType }): void => {
+    namedTypes = inputNamedTypes;
+};
+
+export abstract class DataType<T = any> {
+    paramTypeNames: string[];
+    
+    constructor() {
+        this.paramTypeNames = [];
+    }
+    
+    abstract replaceParamTypes(paramMap: ParamMap): DataType<T>;
+    
+    getErrorText(verb: string): string {
+        return `Cannot "${verb}" ${this.constructor.name}.`;
+    }
     
     getSize(): number {
-        throw new Error("Cannot get size of AnyType.");
+        throw new Error(this.getErrorText("get size of"));
     }
     
-    read(data: Buffer, offset: number): boolean {
-        throw new Error("Cannot read AnyType.");
+    read(data: Buffer, offset: number): T {
+        throw new Error(this.getErrorText("read"));
     }
     
-    write(data: Buffer, offset: number, value: boolean): void {
-        throw new Error("Cannot write AnyType.");
+    write(data: Buffer, offset: number, value: T): void {
+        throw new Error(this.getErrorText("write"));
     }
+    
+    dereference(): LiteralType<T> {
+        throw new Error(this.getErrorText("dereference"));
+    }
+    
+    setParamTypeNames(names: string[]): void {
+        this.paramTypeNames = names;
+    }
+}
+
+export class ParamType extends DataType {
+    name: string;
+    
+    constructor(name: string) {
+        super();
+        this.name = name;
+    }
+    
+    getErrorText(verb: string): string {
+        return `Parameter type "${this.name}" has not been replaced.`;
+    }
+    
+    replaceParamTypes(paramMap: ParamMap): DataType {
+        const replacement = paramMap.get(this.name);
+        return (typeof replacement === "undefined") ? this : replacement;
+    }
+}
+
+export class ReferenceType<T> extends DataType<T> {
+    name: string;
+    paramReplacements: DataType[] | null;
+    dereferencedType: LiteralType | null;
+    
+    constructor(name: string, paramReplacements: DataType[] | null = null) {
+        super();
+        this.name = name;
+        this.paramReplacements = paramReplacements;
+    }
+    
+    getNamedType(): DataType {
+        return namedTypes[this.name];
+    }
+    
+    getNonNullReplacements(): DataType[] {
+        if (this.paramReplacements === null) {
+            return this.getNamedType().paramTypeNames.map((name) => anyType);
+        } else {
+            return this.paramReplacements;
+        }
+    }
+    
+    dereference(): LiteralType {
+        if (this.dereferencedType !== null) {
+            return this.dereferencedType;
+        }
+        let type = namedTypes[this.name];
+        const paramMap = new Map<string, DataType>();
+        this.getNonNullReplacements().forEach((paramReplacement, index) => {
+            const name = type.paramTypeNames[index];
+            paramMap.set(name, paramReplacement);
+        });
+        type = type.replaceParamTypes(paramMap);
+        this.dereferencedType = type.dereference();
+        return this.dereferencedType;
+    }
+    
+    replaceParamTypes(paramMap: ParamMap): DataType {
+        let replacements: DataType[] | null;
+        if (this.paramReplacements === null) {
+            replacements = null;
+        } else {
+            replacements = this.paramReplacements.map((replacement) => (
+                replacement.replaceParamTypes(paramMap)
+            ));
+        }
+        return new ReferenceType(this.name, replacements);
+    }
+}
+
+export class LiteralType<T = any> extends DataType<T> {
+    
+    dereference(): LiteralType<T> {
+        return this;
+    }
+    
+    replaceParamTypes(paramMap: ParamMap): DataType {
+        return this;
+    }
+}
+
+export class AnyType extends LiteralType {
+    
 }
 
 export const anyType = new AnyType();
 
-export class BoolType implements DataType<boolean> {
+export class BoolType extends LiteralType<boolean> {
     
     getSize(): number {
         return 1;
@@ -37,10 +146,11 @@ export class BoolType implements DataType<boolean> {
 
 export const boolType = new BoolType();
 
-export class IntType<T extends number = number> implements DataType<T> {
+export class IntType<T extends number = number> extends LiteralType<T> {
     size: number;
     
     constructor(size: number) {
+        super();
         this.size = size;
     }
     
@@ -57,10 +167,11 @@ export class IntType<T extends number = number> implements DataType<T> {
     }
 }
 
-export class StoragePointerType<T> implements DataType<StoragePointer<T>> {
+export class StoragePointerType<T> extends LiteralType<StoragePointer<T>> {
     elementType: DataType<T>;
     
     constructor(elementType: DataType<T> = null) {
+        super();
         this.elementType = elementType;
     }
     
@@ -78,11 +189,12 @@ export class StoragePointerType<T> implements DataType<StoragePointer<T>> {
     }
 }
 
-export class ArrayType<T> implements DataType<T[]> {
+export class ArrayType<T> extends LiteralType<T[]> {
     elementType: DataType<T>;
     length: number;
     
     constructor(elementType: DataType<T>, length: number) {
+        super();
         this.elementType = elementType;
         this.length = length;
     }
@@ -108,15 +220,17 @@ export class ArrayType<T> implements DataType<T[]> {
     }
 }
 
-export class StructType<T extends Struct> implements DataType<T> {
+export class StructType<T extends Struct> extends LiteralType<T> {
     fieldMap: Map<string, ResolvedField>;
     size: number;
     
-    constructor(fields: Field[], superType?: StructType<Partial<T>>) {
+    constructor(fields: Field[], superType?: DataType<Partial<T>>) {
+        super();
         this.fieldMap = new Map();
         this.size = 0;
         if (typeof superType !== "undefined") {
-            superType.fieldMap.forEach((field) => {
+            const structType = superType.dereference() as StructType<Partial<T>>;
+            structType.fieldMap.forEach((field) => {
                 this.addField(field);
             });
         }
@@ -160,7 +274,7 @@ export class TailStructType<T extends TailStruct = TailStruct> extends StructTyp
     constructor(
         fields: Field[],
         elementType: DataType<TailStructElement<T>>,
-        superType?: StructType<Partial<T>>,
+        superType?: DataType<Partial<T>>,
     ) {
         super(fields, superType);
         this.elementType = elementType;

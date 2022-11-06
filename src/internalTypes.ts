@@ -1,11 +1,8 @@
 
+import { DataType } from "./dataType.js";
 import { ContentAccessor } from "./contentAccessor.js";
 
-export interface DataType<T = any> {
-    getSize(): number;
-    read(data: Buffer, offset: number): T;
-    write(data: Buffer, offset: number, value: T): void;
-}
+export type ParamMap = Map<string, DataType>;
 
 export interface Struct {
     _flavor?: { name: "Struct" };

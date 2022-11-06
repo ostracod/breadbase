@@ -1,7 +1,7 @@
 
-import { DataType, Struct, TailStruct } from "./internalTypes.js";
+import { Struct, TailStruct } from "./internalTypes.js";
 import { TreeBranches, ContentNode } from "./builtTypes.js";
-import { ArrayType, StructType, TailStructType } from "./dataType.js";
+import { DataType, ArrayType, StructType, TailStructType } from "./dataType.js";
 
 export class StoragePointer<T> {
     index: number;

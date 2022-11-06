@@ -88,7 +88,7 @@ abstract class DataType {
     abstract replaceParamTypes(paramMap: ParamMap): DataType;
     
     getDeclarationCode(name: string, paramTypes: ParamType[]): string {
-        return `export type ${name}${getParamTypesCode(paramTypes)} = ${this.getNestedCode()};\n\nexport const ${getTypeInstanceName(name)} = ${this.getInstanceCode()};\n`;
+        return `export type ${name}${getParamTypesCode(paramTypes)} = ${this.getNestedCode()};\n\nexport const ${getTypeInstanceName(name)} = ${this.getInstanceCode()};`;
     }
     
     getPointerInstanceCode(): string {
@@ -109,11 +109,11 @@ class ParamType extends DataType {
     }
     
     getInstanceCode(): string {
-        return anyType.getInstanceCode();
+        return `new ParamType("${this.name}")`;
     }
     
     dereference(): LiteralType {
-        return anyType;
+        throw new Error(`Cannot dereference parameter type "${this.name}".`);
     }
     
     replaceParamTypes(paramMap: ParamMap): DataType {
@@ -131,12 +131,10 @@ abstract class InitDataType extends DataType {
 
 class ReferenceType extends InitDataType {
     name: string;
-    instanceName: string;
     paramReplacements: DataType[] | null;
     
     init(name: string, paramReplacements: DataType[]): void {
         this.name = name;
-        this.instanceName = getTypeInstanceName(this.name);
         this.paramReplacements = paramReplacements;
     }
     
@@ -153,6 +151,18 @@ class ReferenceType extends InitDataType {
         this.init(data.name, paramReplacements);
     }
     
+    getDeclaration(): TypeDeclaration {
+        return typeDeclarationMap.get(this.name);
+    }
+    
+    getNonNullReplacements(): DataType[] {
+        if (this.paramReplacements === null) {
+            return this.getDeclaration().paramTypes.map((paramType) => anyType);
+        } else {
+            return this.paramReplacements;
+        }
+    }
+    
     getNestedCode(): string {
         if (this.paramReplacements === null) {
             return this.name;
@@ -162,7 +172,16 @@ class ReferenceType extends InitDataType {
     }
     
     getInstanceCode(): string {
-        return this.instanceName;
+        const instanceName = getTypeInstanceName(this.name);
+        const resultText = [`new ReferenceType<${this.name}>("${instanceName}"`];
+        const declaration = this.getDeclaration();
+        if (declaration.paramTypes.length > 0) {
+            const paramReplacements = this.getNonNullReplacements();
+            const codeList = paramReplacements.map((paramReplacement) => paramReplacement.getInstanceCode());
+            resultText.push(`, [${codeList.join(", ")}]`);
+        }
+        resultText.push(")");
+        return resultText.join("");
     }
     
     getPointerInstanceCode(): string {
@@ -171,19 +190,13 @@ class ReferenceType extends InitDataType {
     }
     
     dereference(): LiteralType {
-        const declaration = typeDeclarationMap.get(this.name);
+        const declaration = this.getDeclaration();
         let { type } = declaration;
         const paramMap = new Map<string, DataType>();
-        if (this.paramReplacements === null) {
-            declaration.paramTypes.forEach((paramType) => {
-                paramMap.set(paramType.name, anyType);
-            });
-        } else {
-            this.paramReplacements.forEach((paramReplacement, index) => {
-                const { name } = declaration.paramTypes[index];
-                paramMap.set(name, paramReplacement);
-            });
-        }
+        this.getNonNullReplacements().forEach((paramReplacement, index) => {
+            const { name } = declaration.paramTypes[index];
+            paramMap.set(name, paramReplacement);
+        });
         type = type.replaceParamTypes(paramMap);
         return type.dereference();
     }
@@ -452,8 +465,7 @@ class StructType extends LiteralType {
         for (const field of this.subTypeFields) {
             resultText.push(`    ${field.getInstanceCode()},`);
         }
-        const terms = ["]", ...this.getConstructorArgs()];
-        resultText.push(`${terms.join(", ")});\n`);
+        resultText.push(["]", ...this.getConstructorArgs()].join(", ") + ");");
         return resultText.join("\n");
     }
     
@@ -578,7 +590,13 @@ class TypeDeclaration {
     }
     
     getCode(): string {
-        return this.type.getDeclarationCode(this.name, this.paramTypes);
+        const resultText = [this.type.getDeclarationCode(this.name, this.paramTypes)];
+        if (this.paramTypes.length > 0) {
+            const instanceName = getTypeInstanceName(this.name);
+            const namesCode = this.paramTypes.map((paramType) => `"${paramType.name}"`);
+            resultText.push(`${instanceName}.setParamTypeNames([${namesCode.join(", ")}]);`);
+        }
+        return resultText.join("\n") + "\n";
     }
 }
 
@@ -611,15 +629,18 @@ const convertDataToType = (scope: Scope, inputData: TypeData): DataType => {
     return output;
 };
 
-const resultText = ["\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount, AllocType } from \"./constants.js\";\nimport { anyType, boolType, IntType, StoragePointerType, ArrayType, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
+const resultText = ["/* eslint-disable @typescript-eslint/no-unused-vars */\n\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount, AllocType } from \"./constants.js\";\nimport { ParamType, ReferenceType, anyType, boolType, IntType, StoragePointerType, ArrayType, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
 
 const typeDeclarationMap = new Map<string, TypeDeclaration>();
-const declarationsText: string[] = [];
 for (const data of typeDeclarationsData) {
     const declaration = new TypeDeclaration(data);
     typeDeclarationMap.set(declaration.name, declaration);
-    declarationsText.push(declaration.getCode());
 }
+
+const declarationsText: string[] = [];
+typeDeclarationMap.forEach((declaration) => {
+    declarationsText.push(declaration.getCode());
+});
 
 resultText.push("const pointerTypes = {");
 for (const name of pointerTypeNames) {

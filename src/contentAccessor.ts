@@ -9,7 +9,10 @@ import { HeapAllocator } from "./heapAllocator.js";
 import { TreeManager } from "./treeManager.js";
 
 export const contentTypeMap: Map<AllocType, TailStructType<TreeContent>> = new Map([
-    [AllocType.AsciiStringContent, asciiStringContentType],
+    [
+        AllocType.AsciiStringContent,
+        asciiStringContentType.dereference() as TailStructType<TreeContent>,
+    ],
 ]);
 
 export class ContentAccessor<T = any> extends StorageAccessor {
