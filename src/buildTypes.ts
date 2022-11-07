@@ -2,7 +2,7 @@
 import * as fs from "fs";
 import * as pathUtils from "path";
 import { fileURLToPath } from "url";
-import { BaseDataType, BaseParamType, BaseReferenceType, BaseLiteralType, BaseAnyType, BaseBoolType, BaseIntType, BaseArrayType, BaseStoragePointerType, BaseMemberField, BaseStructType, BaseTailStructType, BaseTypeDeclaration } from "./baseTypes.js";
+import { ParentTypes, ParentDataType, BaseDataType, BaseParamType, BaseReferenceType, BaseLiteralType, BaseAnyType, BaseBoolType, BaseIntType, BaseArrayType, BaseStoragePointerType, ParentMemberField, BaseMemberField, BaseStructType, BaseTailStructType, ParentTypeDeclaration, BaseTypeDeclaration } from "./baseTypes.js";
 
 interface NamedTypeData {
     name: string;
@@ -72,12 +72,28 @@ const getParamTypesCode = (paramTypeNames: string[]): string => {
     }
 };
 
-abstract class DataType {
-    base: BaseDataType<DataType>;
+interface PrebuildTypes extends ParentTypes {
+    dataType: DataType;
+    memberField: MemberField;
+    typeDeclaration: TypeDeclaration;
+}
+
+abstract class DataType implements ParentDataType<PrebuildTypes> {
+    base: BaseDataType<PrebuildTypes>;
+    
+    abstract copyWithoutBase(): DataType;
     
     abstract getNestedTypeCode(): string;
     
     abstract getNestedInstanceCode(): string;
+    
+    initWithBase(base: BaseDataType<PrebuildTypes>): void {
+        this.base = base;
+    }
+    
+    getAnyType(): BaseAnyType<PrebuildTypes> {
+        return anyType.base;
+    }
     
     getDeclarationTypeCode(name: string, paramTypeNames: string[]): string {
         return `export type ${name}${getParamTypesCode(paramTypeNames)} = ${this.getNestedTypeCode()};`;
@@ -89,11 +105,14 @@ abstract class DataType {
 }
 
 class ParamType extends DataType {
-    base: BaseParamType<DataType>;
+    base: BaseParamType<PrebuildTypes>;
     
-    constructor(name: string) {
-        super();
-        this.base = new BaseParamType<DataType>(name);
+    init(name: string): void {
+        this.initWithBase(new BaseParamType<PrebuildTypes>(this, name));
+    }
+    
+    copyWithoutBase(): DataType {
+        return new ParamType();
     }
     
     getNestedTypeCode(): string {
@@ -115,15 +134,7 @@ abstract class InitDataType extends DataType {
 }
 
 class ReferenceType extends InitDataType {
-    base: BaseReferenceType<DataType>;
-    
-    init(name: string, paramReplacements: DataType[] | null): void {
-        this.base = new BaseReferenceType<DataType>(
-            baseDeclarationMap,
-            name,
-            paramReplacements.map((replacement) => replacement.base),
-        );
-    }
+    base: BaseReferenceType<PrebuildTypes>;
     
     initWithData(scope: Scope, data: ReferenceTypeData): void {
         const paramReplacementsData = data.paramTypes;
@@ -136,6 +147,25 @@ class ReferenceType extends InitDataType {
             ));
         }
         this.init(data.name, paramReplacements);
+    }
+    
+    init(name: string, paramReplacements: DataType[] | null): void {
+        let baseReplacements: BaseDataType<PrebuildTypes>[] | null;
+        if (paramReplacements === null) {
+            baseReplacements = null;
+        } else {
+            baseReplacements = paramReplacements.map((replacement) => replacement.base);
+        }
+        this.initWithBase(new BaseReferenceType<PrebuildTypes>(
+            this,
+            baseDeclarationMap,
+            name,
+            baseReplacements,
+        ));
+    }
+    
+    copyWithoutBase(): DataType {
+        return new ReferenceType();
     }
     
     getNestedTypeCode(): string {
@@ -160,11 +190,23 @@ class ReferenceType extends InitDataType {
 }
 
 abstract class LiteralType extends InitDataType {
-    base: BaseLiteralType<DataType>;
+    base: BaseLiteralType<PrebuildTypes>;
 }
 
 class AnyType extends LiteralType {
-    base: BaseAnyType<DataType>;
+    base: BaseAnyType<PrebuildTypes>;
+    
+    initWithData(scope: Scope, data: LiteralTypeData): void {
+        this.init();
+    }
+    
+    init(): void {
+        this.initWithBase(new BaseAnyType<PrebuildTypes>(this));
+    }
+    
+    copyWithoutBase(): DataType {
+        return new AnyType();
+    }
     
     getNestedTypeCode(): string {
         return "any";
@@ -176,7 +218,19 @@ class AnyType extends LiteralType {
 }
 
 class BoolType extends LiteralType {
-    base: BaseBoolType<DataType>;
+    base: BaseBoolType<PrebuildTypes>;
+    
+    initWithData(scope: Scope, data: LiteralTypeData): void {
+        this.init();
+    }
+    
+    init(): void {
+        this.initWithBase(new BaseBoolType<PrebuildTypes>(this));
+    }
+    
+    copyWithoutBase(): DataType {
+        return new BoolType();
+    }
     
     getNestedTypeCode(): string {
         return "boolean";
@@ -188,17 +242,27 @@ class BoolType extends LiteralType {
 }
 
 class IntType extends LiteralType {
-    base: BaseIntType<DataType>;
+    base: BaseIntType<PrebuildTypes>;
     enumType: string | null;
-    
-    init(size: number, enumType: string | null = null): void {
-        this.base = new BaseIntType<DataType>(size);
-        this.enumType = enumType;
-    }
     
     initWithData(scope: Scope, data: IntTypeData): void {
         const { enumType } = data;
         this.init(data.size, (typeof enumType === "undefined") ? null : enumType);
+    }
+    
+    initEnumType(enumType: string | null): void {
+        this.enumType = enumType;
+    }
+    
+    init(size: number, enumType: string | null = null): void {
+        this.initWithBase(new BaseIntType<PrebuildTypes>(this, size));
+        this.initEnumType(enumType);
+    }
+    
+    copyWithoutBase(): DataType {
+        const output = new IntType();
+        output.initEnumType(this.enumType);
+        return output;
     }
     
     getNestedTypeCode(): string {
@@ -211,15 +275,19 @@ class IntType extends LiteralType {
 }
 
 class ArrayType extends LiteralType {
-    base: BaseArrayType<DataType>;
-    
-    init(elementType: DataType, length: number) {
-        this.base = new BaseArrayType<DataType>(elementType.base, length);
-    }
+    base: BaseArrayType<PrebuildTypes>;
     
     initWithData(scope: Scope, data: ArrayTypeData): void {
         const elementType = convertDataToType(scope, data.elementType);
         this.init(elementType, data.length);
+    }
+    
+    init(elementType: DataType, length: number): void {
+        this.initWithBase(new BaseArrayType<PrebuildTypes>(this, elementType.base, length));
+    }
+    
+    copyWithoutBase(): DataType {
+        return new ArrayType();
     }
     
     getNestedTypeCode(): string {
@@ -232,15 +300,19 @@ class ArrayType extends LiteralType {
 }
 
 class StoragePointerType extends LiteralType {
-    base: BaseStoragePointerType<DataType>;
-    
-    init(elementType: DataType) {
-        this.base = new BaseStoragePointerType<DataType>(elementType.base);
-    }
+    base: BaseStoragePointerType<PrebuildTypes>;
     
     initWithData(scope: Scope, data: PointerTypeData): void {
         const elementType = convertDataToType(scope, data.elementType);
         this.init(elementType);
+    }
+    
+    init(elementType: DataType): void {
+        this.initWithBase(new BaseStoragePointerType<PrebuildTypes>(this, elementType.base));
+    }
+    
+    copyWithoutBase(): DataType {
+        return new StoragePointerType();
     }
     
     getNestedTypeCode(): string {
@@ -257,12 +329,19 @@ abstract class Field {
     abstract getNestedTypeCode(): string;
 }
 
-class MemberField extends Field {
-    base: BaseMemberField<DataType>;
+class MemberField extends Field implements ParentMemberField<PrebuildTypes> {
+    base: BaseMemberField<PrebuildTypes>;
     
-    constructor(name: string, type: DataType) {
-        super();
-        this.base = new BaseMemberField<DataType>(name, type.base);
+    initWithBase(base: BaseMemberField<PrebuildTypes>): void {
+        this.base = base;
+    }
+    
+    init(name: string, type: DataType): void {
+        this.initWithBase(new BaseMemberField<PrebuildTypes>(this, name, type.base));
+    }
+    
+    copyWithoutBase(): MemberField {
+        return new MemberField();
     }
     
     getNestedTypeCode(): string {
@@ -295,22 +374,12 @@ class TailField extends Field {
 }
 
 class StructType extends LiteralType {
-    base: BaseStructType<DataType>;
+    base: BaseStructType<PrebuildTypes>;
     allFields: Field[];
     
-    initAllFields(): void {
-        this.allFields = [new FlavorField()];
-        this.base.memberFields.forEach((field) => {
-            this.allFields.push(field.parent);
-        });
-    }
-    
-    init(fields: MemberField[], superType: DataType | null = null) {
-        this.base = new BaseStructType<DataType>(
-            fields.map((field) => field.base),
-            (superType === null) ? null : superType.base,
-        );
-        this.initAllFields();
+    initWithBase(base: BaseDataType<PrebuildTypes>): void {
+        super.initWithBase(base);
+        this.allFields = null;
     }
     
     initWithDataHelper(
@@ -324,15 +393,43 @@ class StructType extends LiteralType {
         } else {
             superType = convertDataToType(scope, superTypeData);
         }
-        const fields = data.fields.map((fieldData) => (
-            new MemberField(fieldData.name, convertDataToType(scope, fieldData.type))
-        ));
+        const fields = data.fields.map((fieldData) => {
+            const field = new MemberField();
+            field.init(fieldData.name, convertDataToType(scope, fieldData.type));
+            return field;
+        });
         return { fields, superType };
     }
     
     initWithData(scope: Scope, data: StructTypeData): void {
         const { fields, superType } = this.initWithDataHelper(scope, data);
         this.init(fields, superType);
+    }
+    
+    initFields(): void {
+        this.base.initFieldsIfMissing();
+        this.allFields = [new FlavorField()];
+        this.base.memberFields.forEach((field) => {
+            this.allFields.push(field.parent);
+        });
+    }
+    
+    initFieldsIfMissing(): void {
+        if (this.allFields === null) {
+            this.initFields();
+        }
+    }
+    
+    init(fields: MemberField[], superType: DataType | null = null): void {
+        this.initWithBase(new BaseStructType<PrebuildTypes>(
+            this,
+            fields.map((field) => field.base),
+            (superType === null) ? null : superType.base,
+        ));
+    }
+    
+    copyWithoutBase(): DataType {
+        return new StructType();
     }
     
     getInterfaceName(): string {
@@ -375,6 +472,7 @@ class StructType extends LiteralType {
     }
     
     getNestedTypeCode(): string {
+        this.initFieldsIfMissing();
         const fieldsCode = this.allFields.map((field) => field.getNestedTypeCode());
         return `{ ${fieldsCode.join(", ")} }`;
     }
@@ -391,24 +489,10 @@ class StructType extends LiteralType {
 }
 
 class TailStructType extends StructType {
-    base: BaseTailStructType<DataType>;
+    base: BaseTailStructType<PrebuildTypes>;
     
-    initAllFields(): void {
-        super.initAllFields();
-        this.allFields.push(new TailField(this.base.elementType.parent));
-    }
-    
-    init(
-        fields: MemberField[],
-        superType: DataType | null = null,
-        elementType: DataType | null = null,
-    ) {
-        this.base = new BaseTailStructType<DataType>(
-            fields.map((field) => field.base),
-            (superType === null) ? null : superType.base,
-            (elementType === null) ? null : elementType.base,
-        );
-        this.initAllFields();
+    initWithBase(base: BaseDataType<PrebuildTypes>): void {
+        super.initWithBase(base);
     }
     
     initWithData(scope: Scope, data: TailStructTypeData): void {
@@ -423,7 +507,35 @@ class TailStructType extends StructType {
         this.init(fields, superType, elementType);
     }
     
+    initFields(): void {
+        super.initFields();
+        this.initElementTypeIfMissing();
+        this.allFields.push(new TailField(this.base.elementType.parent));
+    }
+    
+    initElementTypeIfMissing(): void {
+        this.base.initElementTypeIfMissing();
+    }
+    
+    init(
+        fields: MemberField[],
+        superType: DataType | null = null,
+        elementType: DataType | null = null,
+    ): void {
+        this.initWithBase(new BaseTailStructType<PrebuildTypes>(
+            this,
+            fields.map((field) => field.base),
+            (superType === null) ? null : superType.base,
+            (elementType === null) ? null : elementType.base,
+        ));
+    }
+    
+    copyWithoutBase(): DataType {
+        return new TailStructType();
+    }
+    
     getInterfaceName(): string {
+        this.initElementTypeIfMissing();
         return `TailStruct<${this.base.elementType.parent.getNestedTypeCode()}>`;
     }
     
@@ -432,6 +544,7 @@ class TailStructType extends StructType {
     }
     
     getConstructorArgs(): string[] {
+        this.initElementTypeIfMissing();
         return [this.base.elementType.parent.getNestedInstanceCode(), ...super.getConstructorArgs()];
     }
 }
@@ -442,24 +555,39 @@ const literalTypeMap: { [name: string]: InitTypeConstructor } = {
     AnyType, BoolType, IntType, ArrayType, StoragePointerType, StructType, TailStructType,
 };
 
-class TypeDeclaration {
-    base: BaseTypeDeclaration<DataType>;
+class TypeDeclaration implements ParentTypeDeclaration<PrebuildTypes> {
+    base: BaseTypeDeclaration<PrebuildTypes>;
     
-    initWithData(data: DeclarationData) {
+    initWithData(data: DeclarationData): void {
         let paramTypeNames = data.paramTypes;
-        const scope = new Map<string, DataType>();
-        paramTypeNames.forEach((name) => {
-            scope.set(name, new ParamType(name));
-        });
-        const type = convertDataToType(scope, data.type);
         if (typeof paramTypeNames === "undefined") {
             paramTypeNames = [];
         }
+        const scope = new Map<string, DataType>();
+        paramTypeNames.forEach((name) => {
+            const paramType = new ParamType();
+            paramType.init(name);
+            scope.set(name, paramType);
+        });
+        const type = convertDataToType(scope, data.type);
         this.init(data.name, type, paramTypeNames);
     }
     
-    init(name: string, type: DataType, paramTypeNames: string[]) {
-        this.base = new BaseTypeDeclaration<DataType>(name, type.base, paramTypeNames);
+    initWithBase(base: BaseTypeDeclaration<PrebuildTypes>): void {
+        this.base = base;
+    }
+    
+    init(name: string, type: DataType, paramTypeNames: string[]): void {
+        this.initWithBase(new BaseTypeDeclaration<PrebuildTypes>(
+            this,
+            name,
+            type.base,
+            paramTypeNames,
+        ));
+    }
+    
+    copyWithoutBase(): TypeDeclaration {
+        return new TypeDeclaration();
     }
     
     getCode(): string {
@@ -507,20 +635,17 @@ const convertDataToType = (scope: Scope, inputData: TypeData): DataType => {
 
 const resultText = ["\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount, AllocType } from \"./constants.js\";\nimport { addTypeDeclaration, ParamType, ReferenceType, anyType, boolType, IntType, StoragePointerType, ArrayType, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
 
+const baseDeclarationMap = new Map<string, BaseTypeDeclaration<PrebuildTypes>>();
 const typeDeclarations = typeDeclarationsData.map((data) => {
     const declaration = new TypeDeclaration();
     declaration.initWithData(data);
     return declaration;
 });
-const anyTypeDeclaration = new TypeDeclaration();
-anyTypeDeclaration.init("Any", new AnyType(), []);
-typeDeclarations.push(anyTypeDeclaration);
-
-const baseDeclarationMap = new Map<string, BaseTypeDeclaration<DataType>>();
+const anyType = new AnyType();
+anyType.init();
 typeDeclarations.forEach((declaration) => {
     baseDeclarationMap.set(declaration.base.name, declaration.base);
 });
-
 typeDeclarations.forEach((declaration) => {
     resultText.push(declaration.getCode());
 });
