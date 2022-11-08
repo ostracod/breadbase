@@ -2,7 +2,7 @@
 import * as fs from "fs";
 import * as pathUtils from "path";
 import { fileURLToPath } from "url";
-import { ParentTypes, ParentDataType, BaseDataType, BaseParamType, BaseReferenceType, BaseLiteralType, BaseAnyType, BaseBoolType, BaseIntType, BaseStoragePointerType, BaseArrayType, ParentMemberField, BaseMemberField, BaseStructType, BaseTailStructType, ParentTypeDeclaration, BaseTypeDeclaration } from "./baseTypes.js";
+import { ParentTypes, ParentDataType, BaseDataType, BaseParamType, BaseReferenceType, BaseLiteralType, BaseAnyType, BaseBoolType, BaseIntType, BaseStoragePointerType, BaseArrayType, ParentMemberField, BaseMemberField, BaseStructType, BaseTailStructType, BaseTypeDeclaration } from "./baseTypes.js";
 
 interface NamedTypeData {
     name: string;
@@ -81,11 +81,13 @@ interface PrebuildTypes extends ParentTypes {
 abstract class DataType implements ParentDataType<PrebuildTypes> {
     base: BaseDataType<PrebuildTypes>;
     
-    abstract copyWithoutBase(): DataType;
-    
     abstract getNestedTypeCode(): string;
     
     abstract getNestedInstanceCode(): string;
+    
+    copyWithoutBase(): DataType {
+        return new (this.constructor as (new() => DataType))();
+    }
     
     initWithBase(base: BaseDataType<PrebuildTypes>): void {
         this.base = base;
@@ -109,10 +111,6 @@ class ParamType extends DataType {
     
     init(name: string): void {
         this.initWithBase(new BaseParamType<PrebuildTypes>(this, name));
-    }
-    
-    copyWithoutBase(): DataType {
-        return new ParamType();
     }
     
     getNestedTypeCode(): string {
@@ -164,10 +162,6 @@ class ReferenceType extends InitDataType {
         ));
     }
     
-    copyWithoutBase(): DataType {
-        return new ReferenceType();
-    }
-    
     getNestedTypeCode(): string {
         if (this.base.paramReplacements === null) {
             return this.base.name;
@@ -181,7 +175,9 @@ class ReferenceType extends InitDataType {
         const declaration = this.base.getDeclaration();
         if (declaration.paramTypeNames.length > 0) {
             const paramReplacements = this.base.getNonNullReplacements();
-            const codeList = paramReplacements.map((paramReplacement) => paramReplacement.parent.getNestedInstanceCode());
+            const codeList = paramReplacements.map(
+                (paramReplacement) => paramReplacement.parent.getNestedInstanceCode(),
+            );
             resultText.push(`, [${codeList.join(", ")}]`);
         }
         resultText.push(")");
@@ -204,10 +200,6 @@ class AnyType extends LiteralType {
         this.initWithBase(new BaseAnyType<PrebuildTypes>(this));
     }
     
-    copyWithoutBase(): DataType {
-        return new AnyType();
-    }
-    
     getNestedTypeCode(): string {
         return "any";
     }
@@ -216,6 +208,9 @@ class AnyType extends LiteralType {
         return "anyType";
     }
 }
+
+const anyType = new AnyType();
+anyType.init();
 
 class BoolType extends LiteralType {
     base: BaseBoolType<PrebuildTypes>;
@@ -226,10 +221,6 @@ class BoolType extends LiteralType {
     
     init(): void {
         this.initWithBase(new BaseBoolType<PrebuildTypes>(this));
-    }
-    
-    copyWithoutBase(): DataType {
-        return new BoolType();
     }
     
     getNestedTypeCode(): string {
@@ -286,16 +277,16 @@ class StoragePointerType extends LiteralType {
         this.initWithBase(new BaseStoragePointerType<PrebuildTypes>(this, elementType.base));
     }
     
-    copyWithoutBase(): DataType {
-        return new StoragePointerType();
+    getElementType(): DataType {
+        return this.base.elementType.parent;
     }
     
     getNestedTypeCode(): string {
-        return `StoragePointer<${this.base.elementType.parent.getNestedTypeCode()}>`;
+        return `StoragePointer<${this.getElementType().getNestedTypeCode()}>`;
     }
     
     getNestedInstanceCode(): string {
-        return `(new StoragePointerType()).init(${this.base.elementType.parent.getNestedInstanceCode()})`;
+        return `(new StoragePointerType()).init(${this.getElementType().getNestedInstanceCode()})`;
     }
 }
 
@@ -311,16 +302,16 @@ class ArrayType extends LiteralType {
         this.initWithBase(new BaseArrayType<PrebuildTypes>(this, elementType.base, length));
     }
     
-    copyWithoutBase(): DataType {
-        return new ArrayType();
+    getElementType(): DataType {
+        return this.base.elementType.parent;
     }
     
     getNestedTypeCode(): string {
-        return `${this.base.elementType.parent.getNestedTypeCode()}[]`;
+        return `${this.getElementType().getNestedTypeCode()}[]`;
     }
     
     getNestedInstanceCode(): string {
-        return `(new ArrayType()).init(${this.base.elementType.parent.getNestedInstanceCode()}, ${this.base.length})`;
+        return `(new ArrayType()).init(${this.getElementType().getNestedInstanceCode()}, ${this.base.length})`;
     }
 }
 
@@ -341,15 +332,19 @@ class MemberField extends Field implements ParentMemberField<PrebuildTypes> {
     }
     
     copyWithoutBase(): MemberField {
-        return new MemberField();
+        return new (this.constructor as (new() => MemberField))();
+    }
+    
+    getMemberType(): DataType {
+        return this.base.type.parent;
     }
     
     getNestedTypeCode(): string {
-        return `${this.base.name}: ${this.base.type.parent.getNestedTypeCode()}`;
+        return `${this.base.name}: ${this.getMemberType().getNestedTypeCode()}`;
     }
     
     getNestedInstanceCode(): string {
-        return `(new MemberField()).init("${this.base.name}", ${this.base.type.parent.getNestedInstanceCode()})`;
+        return `(new MemberField()).init("${this.base.name}", ${this.getMemberType().getNestedInstanceCode()})`;
     }
 }
 
@@ -407,8 +402,8 @@ class StructType extends LiteralType {
     }
     
     initFields(): void {
-        this.base.initFieldsIfMissing();
         this.allFields = [new FlavorField()];
+        this.base.initFieldsIfMissing();
         this.base.memberFields.forEach((field) => {
             this.allFields.push(field.parent);
         });
@@ -428,8 +423,9 @@ class StructType extends LiteralType {
         ));
     }
     
-    copyWithoutBase(): DataType {
-        return new StructType();
+    getSuperType(): DataType | null {
+        const { superType } = this.base;
+        return (superType === null) ? null : superType.parent;
     }
     
     getInterfaceName(): string {
@@ -441,18 +437,16 @@ class StructType extends LiteralType {
     }
     
     getConstructorArgs(): string[] {
-        if (this.base.superType === null) {
-            return [];
-        } else {
-            return [this.base.superType.parent.getNestedInstanceCode()];
-        }
+        const superType = this.getSuperType();
+        return (superType === null) ? [] : [superType.getNestedInstanceCode()];
     }
     
     getDeclarationTypeCode(name: string, paramTypeNames: string[]): string {
         const resultText: string[] = [];
         let extensionText = this.getInterfaceName();
-        if (this.base.superType !== null) {
-            extensionText += ", " + this.base.superType.parent.getNestedTypeCode();
+        const superType = this.getSuperType();
+        if (superType !== null) {
+            extensionText += ", " + superType.getNestedTypeCode();
         }
         resultText.push(`export interface ${name}${getParamTypesCode(paramTypeNames)} extends ${extensionText} {`);
         for (const field of this.base.subTypeFields) {
@@ -526,13 +520,13 @@ class TailStructType extends StructType {
         ));
     }
     
-    copyWithoutBase(): DataType {
-        return new TailStructType();
+    getElementType(): DataType {
+        this.initElementTypeIfMissing();
+        return this.base.elementType.parent;
     }
     
     getInterfaceName(): string {
-        this.initElementTypeIfMissing();
-        return `TailStruct<${this.base.elementType.parent.getNestedTypeCode()}>`;
+        return `TailStruct<${this.getElementType().getNestedTypeCode()}>`;
     }
     
     getClassName(): string {
@@ -540,10 +534,9 @@ class TailStructType extends StructType {
     }
     
     getConstructorArgs(): string[] {
-        this.initElementTypeIfMissing();
         return [
             ...super.getConstructorArgs(),
-            this.base.elementType.parent.getNestedInstanceCode(),
+            this.getElementType().getNestedInstanceCode(),
         ];
     }
 }
@@ -554,7 +547,7 @@ const literalTypeMap: { [name: string]: InitTypeConstructor } = {
     AnyType, BoolType, IntType, ArrayType, StoragePointerType, StructType, TailStructType,
 };
 
-class TypeDeclaration implements ParentTypeDeclaration<PrebuildTypes> {
+class TypeDeclaration {
     base: BaseTypeDeclaration<PrebuildTypes>;
     
     initWithData(data: DeclarationData): void {
@@ -572,27 +565,20 @@ class TypeDeclaration implements ParentTypeDeclaration<PrebuildTypes> {
         this.init(data.name, type, paramTypeNames);
     }
     
-    initWithBase(base: BaseTypeDeclaration<PrebuildTypes>): void {
-        this.base = base;
-    }
-    
     init(name: string, type: DataType, paramTypeNames: string[]): void {
-        this.initWithBase(new BaseTypeDeclaration<PrebuildTypes>(
+        this.base = new BaseTypeDeclaration<PrebuildTypes>(
             this,
             name,
             type.base,
             paramTypeNames,
-        ));
-    }
-    
-    copyWithoutBase(): TypeDeclaration {
-        return new TypeDeclaration();
+        );
     }
     
     getCode(): string {
         const { name, paramTypeNames } = this.base;
-        const typeCode = this.base.type.parent.getDeclarationTypeCode(name, paramTypeNames);
-        const instanceCode = this.base.type.parent.getDeclarationInstanceCode(name);
+        const type = this.base.type.parent;
+        const typeCode = type.getDeclarationTypeCode(name, paramTypeNames);
+        const instanceCode = type.getDeclarationInstanceCode(name);
         const resultText = [`${typeCode}\n\nexport const ${getTypeInstanceName(name)} = addTypeDeclaration("${name}", ${instanceCode}`];
         if (paramTypeNames.length > 0) {
             const namesCode = paramTypeNames.map((paramTypeName) => `"${paramTypeName}"`);
@@ -618,8 +604,7 @@ const convertDataToType = (scope: Scope, inputData: TypeData): DataType => {
             throw new Error(`Unknown type class "${className}".`);
         }
     } else if ("name" in data) {
-        const { name } = data;
-        const type = scope.get(name);
+        const type = scope.get(data.name);
         if (typeof type !== "undefined") {
             return type;
         }
@@ -640,8 +625,6 @@ const typeDeclarations = typeDeclarationsData.map((data) => {
     declaration.initWithData(data);
     return declaration;
 });
-const anyType = new AnyType();
-anyType.init();
 typeDeclarations.forEach((declaration) => {
     baseDeclarationMap.set(declaration.base.name, declaration.base);
 });

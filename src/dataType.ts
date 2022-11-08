@@ -1,6 +1,6 @@
 
 import { Struct, TailStruct, TailStructElement } from "./internalTypes.js";
-import { ParentTypes, ParentDataType, BaseDataType, BaseParamType, BaseReferenceType, BaseLiteralType, BaseAnyType, BaseBoolType, BaseIntType, BaseArrayType, BaseStoragePointerType, ParentMemberField, BaseMemberField, BaseStructType, BaseTailStructType, ParentTypeDeclaration, BaseTypeDeclaration } from "./baseTypes.js";
+import { ParentTypes, ParentDataType, BaseDataType, BaseParamType, BaseReferenceType, BaseLiteralType, BaseAnyType, BaseBoolType, BaseIntType, BaseArrayType, BaseStoragePointerType, ParentMemberField, BaseMemberField, BaseStructType, BaseTailStructType, BaseTypeDeclaration } from "./baseTypes.js";
 import { storagePointerSize } from "./constants.js";
 import { StoragePointer } from "./storagePointer.js";
 
@@ -15,7 +15,9 @@ const baseDeclarationMap = new Map<string, BaseTypeDeclaration<BuildTypes>>();
 export abstract class DataType<T = any> implements ParentDataType<BuildTypes> {
     base: BaseDataType<BuildTypes>;
     
-    abstract copyWithoutBase(): DataType;
+    copyWithoutBase(): DataType {
+        return new (this.constructor as (new() => DataType<T>))();
+    }
     
     initWithBase(base: BaseDataType<BuildTypes>): void {
         this.base = base;
@@ -54,10 +56,6 @@ export class ParamType extends DataType {
         return this;
     }
     
-    copyWithoutBase(): DataType {
-        return new ParamType();
-    }
-    
     getErrorText(verb: string): string {
         return `Parameter type "${this.base.name}" has not been replaced.`;
     }
@@ -80,10 +78,6 @@ export class ReferenceType<T> extends DataType<T> {
             baseReplacements,
         ));
         return this;
-    }
-    
-    copyWithoutBase(): DataType {
-        return new ReferenceType<T>();
     }
     
     getSize(): number {
@@ -110,10 +104,6 @@ export class AnyType extends LiteralType {
         this.initWithBase(new BaseAnyType<BuildTypes>(this));
         return this;
     }
-    
-    copyWithoutBase(): DataType {
-        return new AnyType();
-    }
 }
 
 export const anyType = (new AnyType()).init();
@@ -124,10 +114,6 @@ export class BoolType extends LiteralType<boolean> {
     init(): this {
         this.initWithBase(new BaseBoolType<BuildTypes>(this));
         return this;
-    }
-    
-    copyWithoutBase(): DataType {
-        return new BoolType();
     }
     
     getSize(): number {
@@ -153,20 +139,16 @@ export class IntType<T extends number = number> extends LiteralType<T> {
         return this;
     }
     
-    copyWithoutBase(): DataType {
-        return new IntType<T>();
-    }
-    
     getSize(): number {
         return this.base.size;
     }
     
     read(data: Buffer, offset: number): T {
-        return data.readIntLE(offset, this.base.size) as T;
+        return data.readIntLE(offset, this.getSize()) as T;
     }
     
     write(data: Buffer, offset: number, value: T): void {
-        data.writeIntLE(value, offset, this.base.size);
+        data.writeIntLE(value, offset, this.getSize());
     }
 }
 
@@ -176,10 +158,6 @@ export class StoragePointerType<T> extends LiteralType<StoragePointer<T>> {
     init(elementType: DataType<T>): this {
         this.initWithBase(new BaseStoragePointerType<BuildTypes>(this, elementType.base));
         return this;
-    }
-    
-    copyWithoutBase(): DataType {
-        return new StoragePointerType<T>();
     }
     
     getSize(): number {
@@ -204,10 +182,6 @@ export class ArrayType<T> extends LiteralType<T[]> {
         return this;
     }
     
-    copyWithoutBase(): DataType {
-        return new ArrayType<T>();
-    }
-    
     getElementType(): DataType<T> {
         return this.base.elementType.parent;
     }
@@ -217,21 +191,18 @@ export class ArrayType<T> extends LiteralType<T[]> {
     }
     
     read(data: Buffer, offset: number): T[] {
-        const elementSize = this.base.elementType.parent.getSize();
+        const elementSize = this.getElementType().getSize();
         const output: T[] = [];
         for (let index = 0; index < this.base.length; index++) {
-            output.push(this.base.elementType.parent.read(
-                data,
-                offset + index * elementSize,
-            ));
+            output.push(this.getElementType().read(data, offset + index * elementSize));
         }
         return output;
     }
     
     write(data: Buffer, offset: number, value: T[]): void {
-        const elementSize = this.base.elementType.parent.getSize();
+        const elementSize = this.getElementType().getSize();
         for (let index = 0; index < this.base.length; index++) {
-            this.base.elementType.parent.write(
+            this.getElementType().write(
                 data,
                 offset + index * elementSize,
                 value[index],
@@ -253,7 +224,7 @@ export class MemberField<T = any> implements ParentMemberField<BuildTypes> {
     }
     
     copyWithoutBase(): MemberField {
-        return new MemberField<T>();
+        return new (this.constructor as (new() => MemberField<T>))();
     }
 }
 
@@ -308,10 +279,6 @@ export class StructType<T extends Struct> extends LiteralType<T> {
         return this;
     }
     
-    copyWithoutBase(): DataType {
-        return new StructType<T>();
-    }
-    
     getFieldMap(): Map<string, ResolvedField> {
         this.initFieldsIfMissing();
         return this.fieldMap;
@@ -356,10 +323,6 @@ export class TailStructType<T extends TailStruct = TailStruct> extends StructTyp
             (elementType === null) ? null : elementType.base,
         ));
         return this;
-    }
-    
-    copyWithoutBase(): DataType {
-        return new TailStructType<T>();
     }
     
     getElementType(): DataType<TailStructElement<T>> {
@@ -413,25 +376,16 @@ export class TailStructType<T extends TailStruct = TailStruct> extends StructTyp
     }
 }
 
-export class TypeDeclaration implements ParentTypeDeclaration<BuildTypes> {
+export class TypeDeclaration {
     base: BaseTypeDeclaration<BuildTypes>;
     
-    initWithBase(base: BaseTypeDeclaration<BuildTypes>): void {
-        this.base = base;
-    }
-    
-    init(name: string, type: DataType, paramTypeNames: string[]): this {
-        this.initWithBase(new BaseTypeDeclaration<BuildTypes>(
+    constructor(name: string, type: DataType, paramTypeNames: string[]) {
+        this.base = new BaseTypeDeclaration<BuildTypes>(
             this,
             name,
             type.base,
             paramTypeNames,
-        ));
-        return this;
-    }
-    
-    copyWithoutBase(): TypeDeclaration {
-        return new TypeDeclaration();
+        );
     }
 }
 
@@ -440,7 +394,7 @@ export const addTypeDeclaration = <T extends DataType>(
     type: T,
     paramTypeNames: string[] = [],
 ): T => {
-    const declaration = (new TypeDeclaration()).init(name, type, paramTypeNames);
+    const declaration = new TypeDeclaration(name, type, paramTypeNames);
     baseDeclarationMap.set(declaration.base.name, declaration.base);
     return type;
 };

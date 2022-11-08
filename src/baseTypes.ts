@@ -10,18 +10,13 @@ export interface ParentMemberField<T extends ParentTypes> {
     initWithBase(base: BaseMemberField<T>): void;
 }
 
-export interface ParentTypeDeclaration<T extends ParentTypes> {
-    copyWithoutBase(): T["typeDeclaration"];
-    initWithBase(base: BaseTypeDeclaration<T>): void;
-}
-
 export interface ParentTypes {
     dataType: ParentDataType<ParentTypes>;
     memberField: ParentMemberField<ParentTypes>;
-    typeDeclaration: ParentTypeDeclaration<ParentTypes>;
+    typeDeclaration: any;
 }
 
-export type BaseParamMap<T extends ParentTypes> = Map<string, BaseDataType<T>>;
+export type ParamMap<T extends ParentTypes> = Map<string, BaseDataType<T>>;
 
 export abstract class BaseDataType<T extends ParentTypes> {
     parent: T["dataType"];
@@ -32,7 +27,7 @@ export abstract class BaseDataType<T extends ParentTypes> {
     
     abstract dereference(): BaseLiteralType<T>;
     
-    abstract replaceParamTypes(paramMap: BaseParamMap<T>): BaseDataType<T>;
+    abstract replaceParamTypes(paramMap: ParamMap<T>): BaseDataType<T>;
 }
 
 export class BaseParamType<T extends ParentTypes> extends BaseDataType<T> {
@@ -47,13 +42,9 @@ export class BaseParamType<T extends ParentTypes> extends BaseDataType<T> {
         throw new Error(`Cannot dereference parameter type "${this.name}".`);
     }
     
-    replaceParamTypes(paramMap: BaseParamMap<T>): BaseDataType<T> {
+    replaceParamTypes(paramMap: ParamMap<T>): BaseDataType<T> {
         const replacement = paramMap.get(this.name);
-        if (typeof replacement === "undefined") {
-            return this as unknown as BaseDataType<T>;
-        } else {
-            return replacement;
-        }
+        return (typeof replacement === "undefined") ? this : replacement;
     }
 }
 
@@ -105,7 +96,7 @@ export class BaseReferenceType<T extends ParentTypes> extends BaseDataType<T> {
         return this.dereferencedType;
     }
     
-    replaceParamTypes(paramMap: BaseParamMap<T>): BaseDataType<T> {
+    replaceParamTypes(paramMap: ParamMap<T>): BaseDataType<T> {
         let replacements: BaseDataType<T>[] | null;
         if (this.paramReplacements === null) {
             replacements = null;
@@ -129,11 +120,11 @@ export class BaseReferenceType<T extends ParentTypes> extends BaseDataType<T> {
 export abstract class BaseLiteralType<T extends ParentTypes> extends BaseDataType<T> {
     
     dereference(): BaseLiteralType<T> {
-        return this as unknown as BaseLiteralType<T>;
+        return this;
     }
     
-    replaceParamTypes(paramMap: BaseParamMap<T>): BaseDataType<T> {
-        return this as unknown as BaseLiteralType<T>;
+    replaceParamTypes(paramMap: ParamMap<T>): BaseDataType<T> {
+        return this;
     }
 }
 
@@ -162,7 +153,7 @@ export class BaseStoragePointerType<T extends ParentTypes> extends BaseLiteralTy
         this.elementType = elementType;
     }
     
-    replaceParamTypes(paramMap: BaseParamMap<T>): BaseDataType<T> {
+    replaceParamTypes(paramMap: ParamMap<T>): BaseDataType<T> {
         const elementType = this.elementType.replaceParamTypes(paramMap);
         const parent = this.parent.copyWithoutBase();
         const output = new BaseStoragePointerType<T>(parent, elementType);
@@ -181,7 +172,7 @@ export class BaseArrayType<T extends ParentTypes> extends BaseLiteralType<T> {
         this.length = length;
     }
     
-    replaceParamTypes(paramMap: BaseParamMap<T>): BaseDataType<T> {
+    replaceParamTypes(paramMap: ParamMap<T>): BaseDataType<T> {
         const elementType = this.elementType.replaceParamTypes(paramMap);
         const parent = this.parent.copyWithoutBase();
         const output = new BaseArrayType<T>(parent, elementType, this.length);
@@ -201,7 +192,7 @@ export class BaseMemberField<T extends ParentTypes> {
         this.type = type;
     }
     
-    replaceParamTypes(paramMap: BaseParamMap<T>): BaseMemberField<T> {
+    replaceParamTypes(paramMap: ParamMap<T>): BaseMemberField<T> {
         const type = this.type.replaceParamTypes(paramMap);
         const parent = this.parent.copyWithoutBase();
         const output = new BaseMemberField<T>(parent, this.name, type);
@@ -244,7 +235,7 @@ export class BaseStructType<T extends ParentTypes> extends BaseLiteralType<T> {
     }
     
     replaceParamsHelper(
-        paramMap: BaseParamMap<T>,
+        paramMap: ParamMap<T>,
     ): { fields: BaseMemberField<T>[], superType: BaseDataType<T> | null } {
         const fields = this.subTypeFields.map((field) => (
             field.replaceParamTypes(paramMap)
@@ -258,7 +249,7 @@ export class BaseStructType<T extends ParentTypes> extends BaseLiteralType<T> {
         return { fields, superType };
     }
     
-    replaceParamTypes(paramMap: BaseParamMap<T>): BaseDataType<T> {
+    replaceParamTypes(paramMap: ParamMap<T>): BaseDataType<T> {
         const { fields, superType } = this.replaceParamsHelper(paramMap);
         const parent = this.parent.copyWithoutBase();
         const output = new BaseStructType<T>(parent, fields, superType);
@@ -284,13 +275,15 @@ export class BaseTailStructType<T extends ParentTypes> extends BaseStructType<T>
     
     initElementTypeIfMissing(): void {
         if (this.uninheritedElementType === null) {
-            this.elementType = (this.superType.dereference() as BaseTailStructType<T>).elementType;
+            const tailStructType = this.superType.dereference() as BaseTailStructType<T>;
+            tailStructType.initElementTypeIfMissing();
+            this.elementType = tailStructType.elementType;
         } else {
             this.elementType = this.uninheritedElementType;
         }
     }
     
-    replaceParamTypes(paramMap: BaseParamMap<T>): BaseDataType<T> {
+    replaceParamTypes(paramMap: ParamMap<T>): BaseDataType<T> {
         const { fields, superType } = this.replaceParamsHelper(paramMap);
         let elementType: BaseDataType<T> | null;
         if (this.uninheritedElementType === null) {
