@@ -6,7 +6,8 @@ import { AllocType } from "./constants.js";
 import { StoragePointer } from "./storagePointer.js";
 import { StorageAccessor } from "./storageAccessor.js";
 import { HeapAllocator } from "./heapAllocator.js";
-import { TreeManager } from "./treeManager.js";
+import { ContentTreeManager } from "./contentTreeManager.js";
+import { ContentNodeAccessor } from "./nodeAccessor.js";
 
 export const contentTypeMap: Map<AllocType, TailStructType<TreeContent>> = new Map([
     [
@@ -17,16 +18,21 @@ export const contentTypeMap: Map<AllocType, TailStructType<TreeContent>> = new M
 
 export class ContentAccessor<T = any> extends StorageAccessor {
     heapAllocator: HeapAllocator;
-    manager: TreeManager;
+    manager: ContentTreeManager;
+    nodeAccessor: ContentNodeAccessor<T>;
     content: StoragePointer<TreeContent<T>>;
     tailStructType: TailStructType<TreeContent<T>>;
     fieldValues: Partial<TreeContent>;
     items: T[];
     
-    async init(manager: TreeManager, content: StoragePointer<TreeContent<T>>): Promise<void> {
+    async init(
+        manager: ContentTreeManager,
+        content: StoragePointer<TreeContent<T>>,
+    ): Promise<void> {
         this.manager = manager;
         this.heapAllocator = this.manager.heapAllocator;
         this.setStorage(this.manager.storage);
+        this.nodeAccessor = this.manager.createNodeAccessor<T>();
         this.content = content;
         this.fieldValues = {};
         this.items = [];
@@ -123,7 +129,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
     
     async updateTotalLengths(): Promise<void> {
         const parent = await this.getField("parent");
-        await this.manager.updateNodeTotalLengths(parent);
+        await this.nodeAccessor.updateNodeTotalLengths(parent);
     }
     
     async insertItems(index: number, valuesToInsert: T[]): Promise<void> {
@@ -146,7 +152,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
     
     async isFinalNode(): Promise<boolean> {
         const parent = await this.getField("parent");
-        return this.manager.isFinalTreeNode(parent);
+        return this.nodeAccessor.isFinalNode(parent);
     }
     
     async resizeBuffer(length: number, inputValues?: T[]): Promise<void> {
@@ -157,7 +163,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         } else {
             values = inputValues;
         }
-        const content = await this.manager.createTreeContent(
+        const content = await this.manager.createContent(
             parent,
             await this.getField("type"),
             length,
@@ -182,14 +188,14 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         for (let startIndex = 0; startIndex < values.length; startIndex += defaultLength) {
             const endIndex = Math.min(startIndex + defaultLength, values.length);
             const subValues = values.slice(startIndex, endIndex);
-            const node = await this.manager.createTreeNode(
+            const node = await this.manager.createNode(
                 typeNumber,
                 defaultLength,
                 subValues,
             );
-            await this.manager.insertTreeNode(node, parent, TreeDirection.Forward);
+            await this.nodeAccessor.insertNode(node, parent, TreeDirection.Forward);
         }
-        await this.manager.deleteTreeNode(parent);
+        await this.manager.deleteNode(parent);
     }
     
     async insertItemsWithOverflow(index: number, valuesToInsert: T[]): Promise<void> {
@@ -217,18 +223,18 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         } else {
             nextNodeItems = valuesToAppend;
         }
-        const node = await this.manager.createTreeNode(
+        const node = await this.manager.createNode(
             await this.getField("type"),
             Math.max(nextNodeItems.length, this.getDefaultBufferLength()),
             nextNodeItems,
         );
         const parent = await this.getField("parent");
-        await this.manager.insertTreeNode(node, parent, TreeDirection.Backward);
+        await this.nodeAccessor.insertNode(node, parent, TreeDirection.Backward);
     }
     
     async borrowItems(): Promise<void> {
         const parent = await this.getField("parent");
-        const nextParent = await this.manager.getNextTreeNode(parent);
+        const nextParent = await this.nodeAccessor.getNextNode(parent);
         if (nextParent === null) {
             return;
         }
@@ -236,11 +242,11 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         const itemCount = await this.getField("itemCount");
         const targetCount = Math.ceil(bufferLength / 2);
         const borrowCount = targetCount - itemCount;
-        const nextAccessor = await this.manager.createNodeContentAccessor(nextParent);
+        const nextAccessor = await this.manager.createContentAccessorByNode(nextParent);
         const nextItemCount = await nextAccessor.getField("itemCount");
         if (borrowCount >= nextItemCount) {
             const valuesToBorrow = await nextAccessor.getAllItems();
-            await this.manager.deleteTreeNode(nextParent);
+            await this.manager.deleteNode(nextParent);
             await this.insertItems(itemCount, valuesToBorrow);
             return;
         }

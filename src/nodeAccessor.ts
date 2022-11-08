@@ -4,17 +4,15 @@ import { Alloc, TreeRoot, treeRootType, TreeBranches, ContentNode, contentNodeTy
 import { DataType } from "./dataType.js";
 import { AllocType, TreeDirection } from "./constants.js";
 import * as allocUtils from "./allocUtils.js";
+import { Storage } from "./storage.js";
 import { StoragePointer, getStructFieldPointer } from "./storagePointer.js";
 import { StorageAccessor } from "./storageAccessor.js";
-import { HeapAllocator } from "./heapAllocator.js";
 
 export abstract class NodeAccessor<T extends Alloc> extends StorageAccessor {
-    heapAllocator: HeapAllocator;
     
-    constructor(heapAllocator: HeapAllocator) {
+    constructor(storage: Storage) {
         super();
-        this.heapAllocator = heapAllocator;
-        this.setStorage(this.heapAllocator.storage);
+        this.setStorage(storage);
     }
     
     abstract getNodeAllocType(): AllocType;
@@ -263,7 +261,7 @@ export abstract class NodeAccessor<T extends Alloc> extends StorageAccessor {
         }
     }
     
-    async balanceTreeNodes(startNode: StoragePointer<T>): Promise<void> {
+    async balanceNodes(startNode: StoragePointer<T>): Promise<void> {
         let node = startNode;
         while (node !== null) {
             const parentNode = await this.getParentNode(node);
@@ -281,7 +279,7 @@ export abstract class NodeAccessor<T extends Alloc> extends StorageAccessor {
     }
     
     // `node` will be inserted before `nextNode` with respect to `direction`.
-    async insertTreeNode(
+    async insertNode(
         node: StoragePointer<T>,
         nextNode: StoragePointer<T>,
         direction: TreeDirection,
@@ -296,10 +294,10 @@ export abstract class NodeAccessor<T extends Alloc> extends StorageAccessor {
             const childKey = allocUtils.getChildKey(direction);
             await this.setNodeChild(previousNode, childKey, node);
         }
-        await this.balanceTreeNodes(node);
+        await this.balanceNodes(node);
     }
     
-    async deleteTreeNode(node: StoragePointer<T>): Promise<void> {
+    async removeNode(node: StoragePointer<T>): Promise<void> {
         const parent = await this.readBranchesField(node, "parent");
         const leftChild = await this.readBranchesField(node, "leftChild");
         const rightChild = await this.readBranchesField(node, "rightChild");
@@ -325,8 +323,7 @@ export abstract class NodeAccessor<T extends Alloc> extends StorageAccessor {
             balanceStartNode = replacementNode;
         }
         await this.replaceChild(parent, node, replacementNode);
-        await this.balanceTreeNodes(balanceStartNode);
-        await this.heapAllocator.deleteAlloc(node);
+        await this.balanceNodes(balanceStartNode);
     }
 }
 

@@ -3,14 +3,14 @@ import { Path, Value, Index } from "./types.js";
 import { Storage, FileStorage } from "./storage.js";
 import { StorageAccessor } from "./storageAccessor.js";
 import { HeapAllocator } from "./heapAllocator.js";
-import { TreeManager } from "./treeManager.js";
+import { ContentTreeManager } from "./contentTreeManager.js";
 
 // Methods and member variables which are not marked as public are meant
 // to be used internally or in automated tests.
 
 export class BreadBase extends StorageAccessor {
     heapAllocator: HeapAllocator;
-    treeManager: TreeManager;
+    contentTreeManager: ContentTreeManager;
     
     public async init(directoryPath: string): Promise<void> {
         const storage = new FileStorage();
@@ -67,7 +67,7 @@ export class BreadBase extends StorageAccessor {
         } else {
             await this.initWithDb();
         }
-        this.treeManager = new TreeManager(this.heapAllocator);
+        this.contentTreeManager = new ContentTreeManager(this.heapAllocator);
     }
 }
 

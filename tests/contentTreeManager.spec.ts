@@ -6,7 +6,8 @@ import { MemoryStorage } from "../src/storage.js";
 import { StoragePointer, createNullPointer } from "../src/storagePointer.js";
 import { StorageAccessor } from "../src/storageAccessor.js";
 import { HeapAllocator } from "../src/heapAllocator.js";
-import { TreeManager } from "../src/treeManager.js";
+import { ContentTreeManager } from "../src/contentTreeManager.js";
+import { ContentNodeAccessor } from "../src/nodeAccessor.js";
 
 interface TestContent {
     bufferLength: number;
@@ -21,7 +22,8 @@ const createArray = (length: number, fillValue: number): number[] => (
 
 class TreeTester extends StorageAccessor {
     allocator: HeapAllocator;
-    manager: TreeManager;
+    manager: ContentTreeManager;
+    nodeAccessor: ContentNodeAccessor<number>;
     nodes: StoragePointer<ContentNode<number>>[];
     root: StoragePointer<ContentRoot<number>>;
     
@@ -29,7 +31,8 @@ class TreeTester extends StorageAccessor {
         this.setStorage(new MemoryStorage());
         this.allocator = new HeapAllocator(this.storage);
         await this.allocator.createEmptyHeap();
-        this.manager = new TreeManager(this.allocator);
+        this.manager = new ContentTreeManager(this.allocator);
+        this.nodeAccessor = this.manager.createNodeAccessor<number>();
         this.root = (await this.allocator.createAlloc(
             AllocType.String,
             contentRootType.getSize() - allocType.getSize(),
@@ -40,24 +43,24 @@ class TreeTester extends StorageAccessor {
     async initWithNodes(nodeAmount: number): Promise<void> {
         await this.init();
         while (this.nodes.length < nodeAmount) {
-            const node = await this.manager.createTreeNode(AllocType.AsciiStringContent, 3, []);
+            const node = await this.manager.createNode(AllocType.AsciiStringContent, 3, []);
             this.nodes.push(node);
         }
-        await this.manager.setTreeRootChild(this.root, this.nodes[0]);
+        await this.nodeAccessor.setRootChild(this.root, this.nodes[0]);
     }
     
     async initWithContents(contents: TestContent[]): Promise<void> {
         await this.init();
         for (let index = 0; index < contents.length; index++) {
             const content = contents[index];
-            const node = await this.manager.createTreeNode(
+            const node = await this.manager.createNode(
                 AllocType.AsciiStringContent,
                 content.bufferLength,
                 content.values,
             );
             this.nodes.push(node);
             if (index === 0) {
-                await this.manager.setTreeRootChild(this.root, node);
+                await this.nodeAccessor.setRootChild(this.root, node);
             } else {
                 await this.insertNode(index, index - 1, TreeDirection.Backward);
             }
@@ -69,7 +72,7 @@ class TreeTester extends StorageAccessor {
         nextNodeIndex: number,
         direction: TreeDirection,
     ): Promise<void> {
-        await this.manager.insertTreeNode(
+        await this.nodeAccessor.insertNode(
             this.nodes[nodeIndex],
             this.nodes[nextNodeIndex],
             direction,
@@ -77,7 +80,7 @@ class TreeTester extends StorageAccessor {
     }
     
     async deleteNode(nodeIndex: number): Promise<void> {
-        await this.manager.deleteTreeNode(this.nodes[nodeIndex]);
+        await this.manager.deleteNode(this.nodes[nodeIndex]);
     }
     
     async createItem(
@@ -85,7 +88,7 @@ class TreeTester extends StorageAccessor {
         contentIndex: number,
     ): Promise<ContentItem<number>> {
         const node = this.nodes[nodeIndex];
-        const accessor = await this.manager.createNodeContentAccessor(node);
+        const accessor = await this.manager.createContentAccessorByNode(node);
         return { accessor, index: contentIndex };
     }
     
@@ -95,7 +98,7 @@ class TreeTester extends StorageAccessor {
         values: number[],
     ): Promise<void> {
         const item = await this.createItem(nodeIndex, contentIndex);
-        await this.manager.insertTreeItems(values, item);
+        await this.manager.insertItems(values, item);
     }
     
     async deleteItems(
@@ -106,7 +109,7 @@ class TreeTester extends StorageAccessor {
     ): Promise<void> {
         const startItem = await this.createItem(startNodeIndex, startContentIndex);
         const endItem = await this.createItem(endNodeIndex, endContentIndex);
-        await this.manager.deleteTreeItems(startItem, endItem);
+        await this.manager.deleteItems(startItem, endItem);
     }
     
     async assertRootChild(childIndex: number): Promise<void> {
@@ -116,7 +119,7 @@ class TreeTester extends StorageAccessor {
         ).toEqual(child.index);
         if (!child.isNull()) {
             expect(
-                (await this.manager.readBranchesField(child, "parent")).index,
+                (await this.nodeAccessor.readBranchesField(child, "parent")).index,
             ).toEqual(this.root.index);
         }
     }
@@ -129,11 +132,11 @@ class TreeTester extends StorageAccessor {
         const node = this.nodes[nodeIndex];
         const child = (childIndex === null) ? nullNodePointer : this.nodes[childIndex];
         expect(
-            (await this.manager.readBranchesField(node, childKey)).index,
+            (await this.nodeAccessor.readBranchesField(node, childKey)).index,
         ).toEqual(child.index);
         if (!child.isNull()) {
             expect(
-                (await this.manager.readBranchesField(child, "parent")).index,
+                (await this.nodeAccessor.readBranchesField(child, "parent")).index,
             ).toEqual(node.index);
         }
     }
@@ -149,24 +152,24 @@ class TreeTester extends StorageAccessor {
     
     async assertContents(contents: TestContent[]): Promise<void> {
         let index = 0;
-        let node = await this.manager.getFirstTreeNode(this.root);
+        let node = await this.nodeAccessor.getFirstNode(this.root);
         while (node !== null) {
             expect(index).toBeLessThan(contents.length);
             const content = contents[index];
-            const accessor = await this.manager.createNodeContentAccessor(node);
+            const accessor = await this.manager.createContentAccessorByNode(node);
             const bufferLength = await accessor.getBufferLength();
             const values = await accessor.getAllItems();
             expect(bufferLength).toEqual(content.bufferLength);
             expect(values).toEqual(content.values);
             index += 1;
-            node = await this.manager.getNextTreeNode(node);
+            node = await this.nodeAccessor.getNextNode(node);
         }
         expect(index).toEqual(contents.length);
     }
 }
 
-describe("TreeManager", () => {
-    describe("insertTreeNode", () => {
+describe("ContentTreeManager", () => {
+    describe("insertNode", () => {
         it("rotates left", async () => {
             const tester = new TreeTester();
             await tester.initWithNodes(3);
@@ -220,7 +223,7 @@ describe("TreeManager", () => {
         });
     });
     
-    describe("deleteTreeNode", () => {
+    describe("deleteNode", () => {
         it("deletes node which has no children", async () => {
             const tester = new TreeTester();
             await tester.initWithNodes(2);
@@ -275,7 +278,7 @@ describe("TreeManager", () => {
         });
     });
     
-    describe("insertTreeItems", () => {
+    describe("insertItems", () => {
         it("works without any insertion", async () => {
             const tester = new TreeTester();
             await tester.initWithContents([
@@ -480,7 +483,7 @@ describe("TreeManager", () => {
         });
     });
     
-    describe("deleteTreeItems", () => {
+    describe("deleteItems", () => {
         it("deletes without borrow", async () => {
             const tester = new TreeTester();
             await tester.initWithContents([
