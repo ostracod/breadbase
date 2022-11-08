@@ -55,7 +55,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
     }
     
     getElementSize(): number {
-        return this.tailStructType.elementType.getSize();
+        return this.tailStructType.getElementType().getSize();
     }
     
     async getBufferLength(): Promise<number> {

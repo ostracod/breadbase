@@ -1,11 +1,14 @@
 
 import { Struct, TailStruct } from "../src/internalTypes.js";
-import { IntType, ArrayType, StructType, TailStructType } from "../src/dataType.js";
+import { IntType, ArrayType, MemberField, StructType, TailStructType } from "../src/dataType.js";
 import { StoragePointer, getArrayElementPointer, getStructFieldPointer, getTailElementPointer } from "../src/storagePointer.js";
 
 describe("getArrayElementPointer", () => {
     it("creates a pointer to an element in an array", async () => {
-        const arrayPointer = new StoragePointer(100, new ArrayType(new IntType(4), 10));
+        const arrayPointer = new StoragePointer(
+            100,
+            (new ArrayType<number>()).init((new IntType()).init(4), 10),
+        );
         const elementPointer: StoragePointer<number> = getArrayElementPointer(
             arrayPointer, 5,
         );
@@ -20,9 +23,9 @@ describe("getStructFieldPointer", () => {
             x: number,
             y: number,
         }
-        const structType = new StructType<MyStruct>([
-            { name: "x", type: new IntType(2) },
-            { name: "y", type: new IntType(4) },
+        const structType = (new StructType<MyStruct>()).init([
+            (new MemberField()).init("x", (new IntType()).init(2)),
+            (new MemberField()).init("y", (new IntType()).init(4)),
         ]);
         const structPointer = new StoragePointer(100, structType);
         const elementPointer: StoragePointer<number> = getStructFieldPointer(
@@ -39,17 +42,17 @@ describe("getTailElementPointer", () => {
             x: number,
             y: number,
         }
-        const tailStructType = new TailStructType<MyTailStruct>([
-            { name: "x", type: new IntType(2) },
-            { name: "y", type: new IntType(1) },
-        ], new IntType(4));
+        const tailStructType = (new TailStructType<MyTailStruct>()).init([
+            (new MemberField()).init("x", (new IntType()).init(2)),
+            (new MemberField()).init("y", (new IntType()).init(1)),
+        ], null, (new IntType()).init(4));
         const tailStructPointer = new StoragePointer(100, tailStructType);
         const elementPointer: StoragePointer<number> = getTailElementPointer(
             tailStructPointer, 3,
         );
         expect(elementPointer.index).toEqual(115);
         expect(elementPointer.type instanceof IntType).toEqual(true);
-        expect((elementPointer.type as IntType).size).toEqual(4);
+        expect((elementPointer.type as IntType).base.size).toEqual(4);
     });
 });
 

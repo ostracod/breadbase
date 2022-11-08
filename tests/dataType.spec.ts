@@ -1,9 +1,9 @@
 
 import { Struct, TailStruct } from "../src/internalTypes.js";
-import { BoolType, boolType, IntType, ArrayType, StructType, TailStructType } from "../src/dataType.js";
+import { BoolType, boolType, IntType, ArrayType, MemberField, StructType, TailStructType } from "../src/dataType.js";
 
 describe("ArrayType", () => {
-    const arrayType = new ArrayType(new IntType(2), 3);
+    const arrayType = (new ArrayType()).init((new IntType()).init(2), 3);
     
     describe("getSize", () => {
         it("retrieves the size of the array", () => {
@@ -33,9 +33,9 @@ describe("StructType", () => {
         x: number,
         y: number,
     }
-    const structType = new StructType<MyStruct>([
-        { name: "x", type: new IntType(2) },
-        { name: "y", type: new IntType(4) },
+    const structType = (new StructType<MyStruct>()).init([
+        (new MemberField()).init("x", (new IntType()).init(2)),
+        (new MemberField()).init("y", (new IntType()).init(4)),
     ]);
     
     describe("getSize", () => {
@@ -65,8 +65,8 @@ describe("StructType", () => {
             interface MyStruct2 extends MyStruct {
                 z: boolean,
             }
-            const structType2 = new StructType<MyStruct2>([
-                { name: "z", type: new BoolType() },
+            const structType2 = (new StructType<MyStruct2>()).init([
+                (new MemberField()).init("z", (new BoolType()).init()),
             ], structType);
             expect(structType2.getSize()).toEqual(7);
             expect(structType2.getField("x").offset).toEqual(0);
@@ -81,10 +81,10 @@ describe("TailStructType", () => {
         x: number,
         y: number,
     }
-    const tailStructType = new TailStructType<MyTailStruct>([
-        { name: "x", type: new IntType(2) },
-        { name: "y", type: new IntType(1) },
-    ], boolType);
+    const tailStructType = (new TailStructType<MyTailStruct>()).init([
+        (new MemberField()).init("x", (new IntType()).init(2)),
+        (new MemberField()).init("y", (new IntType()).init(1)),
+    ], null, boolType);
     
     describe("read", () => {
         it("reads the tail struct from a buffer without tail", () => {

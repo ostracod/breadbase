@@ -2,7 +2,7 @@
 import * as fs from "fs";
 import * as pathUtils from "path";
 import { fileURLToPath } from "url";
-import { ParentTypes, ParentDataType, BaseDataType, BaseParamType, BaseReferenceType, BaseLiteralType, BaseAnyType, BaseBoolType, BaseIntType, BaseArrayType, BaseStoragePointerType, ParentMemberField, BaseMemberField, BaseStructType, BaseTailStructType, ParentTypeDeclaration, BaseTypeDeclaration } from "./baseTypes.js";
+import { ParentTypes, ParentDataType, BaseDataType, BaseParamType, BaseReferenceType, BaseLiteralType, BaseAnyType, BaseBoolType, BaseIntType, BaseStoragePointerType, BaseArrayType, ParentMemberField, BaseMemberField, BaseStructType, BaseTailStructType, ParentTypeDeclaration, BaseTypeDeclaration } from "./baseTypes.js";
 
 interface NamedTypeData {
     name: string;
@@ -120,7 +120,7 @@ class ParamType extends DataType {
     }
     
     getNestedInstanceCode(): string {
-        return `new ParamType("${this.base.name}")`;
+        return `(new ParamType()).init("${this.base.name}")`;
     }
 }
 
@@ -177,7 +177,7 @@ class ReferenceType extends InitDataType {
     }
     
     getNestedInstanceCode(): string {
-        const resultText = [`new ReferenceType<${this.base.name}>("${this.base.name}"`];
+        const resultText = [`(new ReferenceType<${this.base.name}>()).init("${this.base.name}"`];
         const declaration = this.base.getDeclaration();
         if (declaration.paramTypeNames.length > 0) {
             const paramReplacements = this.base.getNonNullReplacements();
@@ -270,32 +270,7 @@ class IntType extends LiteralType {
     }
     
     getNestedInstanceCode(): string {
-        return `new IntType(${this.base.size})`;
-    }
-}
-
-class ArrayType extends LiteralType {
-    base: BaseArrayType<PrebuildTypes>;
-    
-    initWithData(scope: Scope, data: ArrayTypeData): void {
-        const elementType = convertDataToType(scope, data.elementType);
-        this.init(elementType, data.length);
-    }
-    
-    init(elementType: DataType, length: number): void {
-        this.initWithBase(new BaseArrayType<PrebuildTypes>(this, elementType.base, length));
-    }
-    
-    copyWithoutBase(): DataType {
-        return new ArrayType();
-    }
-    
-    getNestedTypeCode(): string {
-        return `${this.base.elementType.parent.getNestedTypeCode()}[]`;
-    }
-    
-    getNestedInstanceCode(): string {
-        return `new ArrayType(${this.base.elementType.parent.getNestedInstanceCode()}, ${this.base.length})`;
+        return `(new IntType()).init(${this.base.size})`;
     }
 }
 
@@ -320,7 +295,32 @@ class StoragePointerType extends LiteralType {
     }
     
     getNestedInstanceCode(): string {
-        return `new StoragePointerType(${this.base.elementType.parent.getNestedInstanceCode()})`;
+        return `(new StoragePointerType()).init(${this.base.elementType.parent.getNestedInstanceCode()})`;
+    }
+}
+
+class ArrayType extends LiteralType {
+    base: BaseArrayType<PrebuildTypes>;
+    
+    initWithData(scope: Scope, data: ArrayTypeData): void {
+        const elementType = convertDataToType(scope, data.elementType);
+        this.init(elementType, data.length);
+    }
+    
+    init(elementType: DataType, length: number): void {
+        this.initWithBase(new BaseArrayType<PrebuildTypes>(this, elementType.base, length));
+    }
+    
+    copyWithoutBase(): DataType {
+        return new ArrayType();
+    }
+    
+    getNestedTypeCode(): string {
+        return `${this.base.elementType.parent.getNestedTypeCode()}[]`;
+    }
+    
+    getNestedInstanceCode(): string {
+        return `(new ArrayType()).init(${this.base.elementType.parent.getNestedInstanceCode()}, ${this.base.length})`;
     }
 }
 
@@ -349,7 +349,7 @@ class MemberField extends Field implements ParentMemberField<PrebuildTypes> {
     }
     
     getNestedInstanceCode(): string {
-        return `{ name: "${this.base.name}", type: ${this.base.type.parent.getNestedInstanceCode()} }`;
+        return `(new MemberField()).init("${this.base.name}", ${this.base.type.parent.getNestedInstanceCode()})`;
     }
 }
 
@@ -463,7 +463,7 @@ class StructType extends LiteralType {
     }
     
     getDeclarationInstanceCode(name: string): string {
-        const resultText: string[] = [`new ${this.getClassName()}<${name}>([`];
+        const resultText: string[] = [`(new ${this.getClassName()}<${name}>()).init([`];
         for (const field of this.base.subTypeFields) {
             resultText.push(`    ${field.parent.getNestedInstanceCode()},`);
         }
@@ -481,7 +481,7 @@ class StructType extends LiteralType {
         const fieldCodeList = this.base.subTypeFields.map(
             (field) => field.parent.getNestedInstanceCode(),
         );
-        const resultText = [`new ${this.getClassName()}([${fieldCodeList.join(", ")}`];
+        const resultText = [`(new ${this.getClassName()}()).init([${fieldCodeList.join(", ")}`];
         const terms = ["]", ...this.getConstructorArgs()];
         resultText.push(`${terms.join(", ")})`);
         return resultText.join("");
@@ -490,10 +490,6 @@ class StructType extends LiteralType {
 
 class TailStructType extends StructType {
     base: BaseTailStructType<PrebuildTypes>;
-    
-    initWithBase(base: BaseDataType<PrebuildTypes>): void {
-        super.initWithBase(base);
-    }
     
     initWithData(scope: Scope, data: TailStructTypeData): void {
         const { fields, superType } = this.initWithDataHelper(scope, data);
@@ -545,7 +541,10 @@ class TailStructType extends StructType {
     
     getConstructorArgs(): string[] {
         this.initElementTypeIfMissing();
-        return [this.base.elementType.parent.getNestedInstanceCode(), ...super.getConstructorArgs()];
+        return [
+            ...super.getConstructorArgs(),
+            this.base.elementType.parent.getNestedInstanceCode(),
+        ];
     }
 }
 
@@ -633,7 +632,7 @@ const convertDataToType = (scope: Scope, inputData: TypeData): DataType => {
     return output;
 };
 
-const resultText = ["\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount, AllocType } from \"./constants.js\";\nimport { addTypeDeclaration, ParamType, ReferenceType, anyType, boolType, IntType, StoragePointerType, ArrayType, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
+const resultText = ["\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount, AllocType } from \"./constants.js\";\nimport { addTypeDeclaration, ParamType, ReferenceType, anyType, boolType, IntType, StoragePointerType, ArrayType, MemberField, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
 
 const baseDeclarationMap = new Map<string, BaseTypeDeclaration<PrebuildTypes>>();
 const typeDeclarations = typeDeclarationsData.map((data) => {

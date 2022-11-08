@@ -1,6 +1,6 @@
 
 import { TailStruct } from "../src/internalTypes.js";
-import { boolType, IntType, TailStructType } from "../src/dataType.js";
+import { boolType, IntType, MemberField, TailStructType } from "../src/dataType.js";
 import { StoragePointer } from "../src/storagePointer.js";
 import { MemoryStorage } from "../src/storage.js";
 import { StorageAccessor } from "../src/storageAccessor.js";
@@ -11,10 +11,10 @@ describe("StorageAccessor", () => {
             x: number,
             y: number,
         }
-        const tailStructType = new TailStructType<MyTailStruct>([
-            { name: "x", type: new IntType(2) },
-            { name: "y", type: new IntType(1) },
-        ], boolType);
+        const tailStructType = (new TailStructType<MyTailStruct>).init([
+            (new MemberField()).init("x", (new IntType()).init(2)),
+            (new MemberField()).init("y", (new IntType()).init(1)),
+        ], null, boolType);
         
         it("reads a tail struct in storage", async () => {
             const storage = new MemoryStorage();

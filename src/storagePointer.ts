@@ -29,7 +29,8 @@ export const getArrayElementPointer = <T>(
     pointer: StoragePointer<T[]>,
     index: number,
 ): StoragePointer<T> => {
-    const { elementType } = pointer.type.dereference() as ArrayType<T>;
+    const arrayType = pointer.type.dereference() as ArrayType<T>;
+    const elementType = arrayType.getElementType();
     const elementSize = elementType.getSize();
     return new StoragePointer(pointer.index + index * elementSize, elementType);
 };
@@ -49,7 +50,7 @@ export const getTailElementPointer = <T>(
 ): StoragePointer<T> => {
     const tailStructType = pointer.type.dereference() as TailStructType<TailStruct<T>>;
     const tailIndex = tailStructType.getTailOffset(pointer.index);
-    const { elementType } = tailStructType;
+    const elementType = tailStructType.getElementType();
     const elementSize = elementType.getSize();
     return new StoragePointer(tailIndex + index * elementSize, elementType);
 };

@@ -61,6 +61,7 @@ export class BaseReferenceType<T extends ParentTypes> extends BaseDataType<T> {
     declarationMap: Map<string, BaseTypeDeclaration<T>>;
     name: string;
     paramReplacements: BaseDataType<T>[] | null;
+    dereferencedType: BaseLiteralType<T> | null;
     
     constructor(
         parent: T["dataType"],
@@ -72,6 +73,7 @@ export class BaseReferenceType<T extends ParentTypes> extends BaseDataType<T> {
         this.declarationMap = declarationMap;
         this.name = name;
         this.paramReplacements = paramReplacements;
+        this.dereferencedType = null;
     }
     
     getDeclaration(): BaseTypeDeclaration<T> {
@@ -88,6 +90,9 @@ export class BaseReferenceType<T extends ParentTypes> extends BaseDataType<T> {
     }
     
     dereference(): BaseLiteralType<T> {
+        if (this.dereferencedType !== null) {
+            return this.dereferencedType;
+        }
         const declaration = this.getDeclaration();
         let { type } = declaration;
         const paramMap = new Map<string, BaseDataType<T>>();
@@ -96,7 +101,8 @@ export class BaseReferenceType<T extends ParentTypes> extends BaseDataType<T> {
             paramMap.set(name, paramReplacement);
         });
         type = type.replaceParamTypes(paramMap);
-        return type.dereference();
+        this.dereferencedType = type.dereference();
+        return this.dereferencedType;
     }
     
     replaceParamTypes(paramMap: BaseParamMap<T>): BaseDataType<T> {
@@ -148,6 +154,23 @@ export class BaseIntType<T extends ParentTypes> extends BaseLiteralType<T> {
     }
 }
 
+export class BaseStoragePointerType<T extends ParentTypes> extends BaseLiteralType<T> {
+    elementType: BaseDataType<T>;
+    
+    constructor(parent: T["dataType"], elementType: BaseDataType<T>) {
+        super(parent);
+        this.elementType = elementType;
+    }
+    
+    replaceParamTypes(paramMap: BaseParamMap<T>): BaseDataType<T> {
+        const elementType = this.elementType.replaceParamTypes(paramMap);
+        const parent = this.parent.copyWithoutBase();
+        const output = new BaseStoragePointerType<T>(parent, elementType);
+        parent.initWithBase(output);
+        return output;
+    }
+}
+
 export class BaseArrayType<T extends ParentTypes> extends BaseLiteralType<T> {
     elementType: BaseDataType<T>;
     length: number;
@@ -162,23 +185,6 @@ export class BaseArrayType<T extends ParentTypes> extends BaseLiteralType<T> {
         const elementType = this.elementType.replaceParamTypes(paramMap);
         const parent = this.parent.copyWithoutBase();
         const output = new BaseArrayType<T>(parent, elementType, this.length);
-        parent.initWithBase(output);
-        return output;
-    }
-}
-
-export class BaseStoragePointerType<T extends ParentTypes> extends BaseLiteralType<T> {
-    elementType: BaseDataType<T>;
-    
-    constructor(parent: T["dataType"], elementType: BaseDataType<T>) {
-        super(parent);
-        this.elementType = elementType;
-    }
-    
-    replaceParamTypes(paramMap: BaseParamMap<T>): BaseDataType<T> {
-        const elementType = this.elementType.replaceParamTypes(paramMap);
-        const parent = this.parent.copyWithoutBase();
-        const output = new BaseStoragePointerType<T>(parent, elementType);
         parent.initWithBase(output);
         return output;
     }
@@ -227,6 +233,7 @@ export class BaseStructType<T extends ParentTypes> extends BaseLiteralType<T> {
         this.memberFields = [];
         if (this.superType !== null) {
             const structType = this.superType.dereference() as BaseStructType<T>;
+            structType.initFieldsIfMissing();
             structType.memberFields.forEach((field) => {
                 this.memberFields.push(field);
             });
