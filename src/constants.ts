@@ -4,7 +4,7 @@ export const storagePointerSize = 6;
 export const defaultContentSize = 50;
 
 export enum AllocType {
-    Node = 1,
+    ContentNode = 1,
     String = 2,
     AsciiStringContent = 3,
 }

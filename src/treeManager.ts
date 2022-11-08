@@ -5,7 +5,6 @@ import * as allocUtils from "./allocUtils.js";
 import { TailStructType } from "./dataType.js";
 import { Alloc, allocType, ContentRoot, contentRootType, TreeBranches, ContentNode, contentNodeType, TreeContent } from "./builtTypes.js";
 import { StoragePointer, createNullPointer, getBranchesFieldPointer } from "./storagePointer.js";
-import { Storage } from "./storage.js";
 import { StorageAccessor } from "./storageAccessor.js";
 import { HeapAllocator } from "./heapAllocator.js";
 import { ContentAccessor, contentTypeMap } from "./contentAccessor.js";
@@ -15,10 +14,10 @@ const nullContentNodePointer = createNullPointer(contentNodeType);
 export class TreeManager extends StorageAccessor {
     heapAllocator: HeapAllocator;
     
-    constructor(storage: Storage, heapAllocator: HeapAllocator) {
+    constructor(heapAllocator: HeapAllocator) {
         super();
-        this.setStorage(storage);
         this.heapAllocator = heapAllocator;
+        this.setStorage(this.heapAllocator.storage);
     }
     
     async createTreeContentAccessor<T>(
@@ -181,7 +180,7 @@ export class TreeManager extends StorageAccessor {
             while (true) {
                 const parent = await this.readBranchesField(child, "parent");
                 const allocType = await this.readStructField(parent, "type");
-                if (allocType !== AllocType.Node) {
+                if (allocType !== AllocType.ContentNode) {
                     return null;
                 }
                 const parentNode = parent.convert(contentNodeType);
@@ -286,7 +285,7 @@ export class TreeManager extends StorageAccessor {
         values: T[],
     ): Promise<StoragePointer<ContentNode<T>>> {
         const output = (await this.heapAllocator.createAlloc(
-            AllocType.Node,
+            AllocType.ContentNode,
             contentNodeType.getSize() - allocType.getSize(),
         )).convert(contentNodeType);
         const content = await this.createTreeContent(
@@ -408,7 +407,7 @@ export class TreeManager extends StorageAccessor {
         newChild: StoragePointer<ContentNode<T>>,
     ): Promise<void> {
         const type = await this.readStructField(parent, "type");
-        if (type === AllocType.Node) {
+        if (type === AllocType.ContentNode) {
             const node = parent.convert(contentNodeType);
             await this.replaceNodeChild(node, oldChild, newChild);
         } else {
@@ -451,7 +450,7 @@ export class TreeManager extends StorageAccessor {
     ): Promise<StoragePointer<ContentNode<T>>> {
         const parent = await this.readBranchesField(node, "parent");
         const type = await this.readStructField(parent, "type");
-        return (type === AllocType.Node) ? parent.convert(contentNodeType) : null;
+        return (type === AllocType.ContentNode) ? parent.convert(contentNodeType) : null;
     }
     
     async balanceTreeNodes(startNode: StoragePointer<ContentNode>): Promise<void> {

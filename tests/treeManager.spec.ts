@@ -29,7 +29,7 @@ class TreeTester extends StorageAccessor {
         this.setStorage(new MemoryStorage());
         this.allocator = new HeapAllocator(this.storage);
         await this.allocator.createEmptyHeap();
-        this.manager = new TreeManager(this.storage, this.allocator);
+        this.manager = new TreeManager(this.allocator);
         this.root = (await this.allocator.createAlloc(
             AllocType.String,
             contentRootType.getSize() - allocType.getSize(),

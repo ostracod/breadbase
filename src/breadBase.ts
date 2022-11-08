@@ -67,7 +67,7 @@ export class BreadBase extends StorageAccessor {
         } else {
             await this.initWithDb();
         }
-        this.treeManager = new TreeManager(this.storage, this.heapAllocator);
+        this.treeManager = new TreeManager(this.heapAllocator);
     }
 }
 

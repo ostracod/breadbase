@@ -45,7 +45,7 @@ describe("HeapAllocator", () => {
             const storage = new MemoryStorage();
             const allocator = new HeapAllocator(storage);
             await allocator.createEmptyHeap();
-            const allocPointer = await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer = await allocator.createAlloc(AllocType.ContentNode, 50);
             expect(allocPointer.index).toEqual(storageHeaderSize);
             const finalSpanPointer = new StoragePointer(
                 storageHeaderSize + 73,
@@ -78,10 +78,10 @@ describe("HeapAllocator", () => {
             const storage = new MemoryStorage();
             const allocator = new HeapAllocator(storage);
             await allocator.createEmptyHeap();
-            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 200);
-            await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer1 = await allocator.createAlloc(AllocType.ContentNode, 200);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
             await allocator.deleteAlloc(allocPointer1);
-            const allocPointer3 = await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer3 = await allocator.createAlloc(AllocType.ContentNode, 50);
             expect(allocPointer3.index).toEqual(storageHeaderSize);
             const alloc3 = await allocator.read(allocPointer3);
             assertStructsAreEqual(alloc3, {
@@ -115,10 +115,10 @@ describe("HeapAllocator", () => {
             const storage = new MemoryStorage();
             const allocator = new HeapAllocator(storage);
             await allocator.createEmptyHeap();
-            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 65);
-            await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer1 = await allocator.createAlloc(AllocType.ContentNode, 65);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
             await allocator.deleteAlloc(allocPointer1);
-            const allocPointer3 = await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer3 = await allocator.createAlloc(AllocType.ContentNode, 50);
             expect(allocPointer3.index).toEqual(storageHeaderSize);
             const alloc3 = await allocator.read(allocPointer3);
             assertStructsAreEqual(alloc3, {
@@ -135,10 +135,10 @@ describe("HeapAllocator", () => {
             const storage = new MemoryStorage();
             const allocator = new HeapAllocator(storage);
             await allocator.createEmptyHeap();
-            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 50);
-            await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer1 = await allocator.createAlloc(AllocType.ContentNode, 50);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
             await allocator.deleteAlloc(allocPointer1);
-            const allocPointer3 = await allocator.createAlloc(AllocType.Node, 70);
+            const allocPointer3 = await allocator.createAlloc(AllocType.ContentNode, 70);
             expect(allocPointer3.index).toEqual(storageHeaderSize + 146);
             const alloc3 = await allocator.read(allocPointer3);
             assertStructsAreEqual(alloc3, {
@@ -158,7 +158,7 @@ describe("HeapAllocator", () => {
             const storage = new MemoryStorage();
             const allocator = new HeapAllocator(storage);
             await allocator.createEmptyHeap();
-            const allocPointer = await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer = await allocator.createAlloc(AllocType.ContentNode, 50);
             await allocator.deleteAlloc(allocPointer);
             const finalSpanPointer = new StoragePointer(storageHeaderSize, emptySpanType);
             expect(allocator.finalSpan.index).toEqual(finalSpanPointer.index);
@@ -178,8 +178,8 @@ describe("HeapAllocator", () => {
             const storage = new MemoryStorage();
             const allocator = new HeapAllocator(storage);
             await allocator.createEmptyHeap();
-            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 200);
-            await allocator.createAlloc(AllocType.Node, 50);
+            const allocPointer1 = await allocator.createAlloc(AllocType.ContentNode, 200);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
             await allocator.deleteAlloc(allocPointer1);
             const emptySpanPointer = new StoragePointer(storageHeaderSize, emptySpanType);
             const emptySpan = await allocator.read(emptySpanPointer);
@@ -199,11 +199,11 @@ describe("HeapAllocator", () => {
             const storage = new MemoryStorage();
             const allocator = new HeapAllocator(storage);
             await allocator.createEmptyHeap();
-            await allocator.createAlloc(AllocType.Node, 50);
-            await allocator.createAlloc(AllocType.Node, 50);
-            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 50);
-            await allocator.createAlloc(AllocType.Node, 50);
-            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
+            const allocPointer1 = await allocator.createAlloc(AllocType.ContentNode, 50);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
             await allocator.deleteAlloc(allocPointer1);
             const emptySpan = await allocator.read(
                 new StoragePointer(storageHeaderSize + 146, emptySpanType),
@@ -223,11 +223,11 @@ describe("HeapAllocator", () => {
             const storage = new MemoryStorage();
             const allocator = new HeapAllocator(storage);
             await allocator.createEmptyHeap();
-            await allocator.createAlloc(AllocType.Node, 50);
-            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 50);
-            const allocPointer2 = await allocator.createAlloc(AllocType.Node, 50);
-            const allocPointer3 = await allocator.createAlloc(AllocType.Node, 50);
-            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
+            const allocPointer1 = await allocator.createAlloc(AllocType.ContentNode, 50);
+            const allocPointer2 = await allocator.createAlloc(AllocType.ContentNode, 50);
+            const allocPointer3 = await allocator.createAlloc(AllocType.ContentNode, 50);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
             await allocator.deleteAlloc(allocPointer1);
             await allocator.deleteAlloc(allocPointer2);
             const emptySpan = await allocator.read(
@@ -258,11 +258,11 @@ describe("HeapAllocator", () => {
             const storage = new MemoryStorage();
             const allocator = new HeapAllocator(storage);
             await allocator.createEmptyHeap();
-            await allocator.createAlloc(AllocType.Node, 50);
-            await allocator.createAlloc(AllocType.Node, 50);
-            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 50);
-            const allocPointer2 = await allocator.createAlloc(AllocType.Node, 50);
-            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
+            const allocPointer1 = await allocator.createAlloc(AllocType.ContentNode, 50);
+            const allocPointer2 = await allocator.createAlloc(AllocType.ContentNode, 50);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
             await allocator.deleteAlloc(allocPointer2);
             await allocator.deleteAlloc(allocPointer1);
             const emptySpan = await allocator.read(
@@ -283,11 +283,11 @@ describe("HeapAllocator", () => {
             const storage = new MemoryStorage();
             const allocator = new HeapAllocator(storage);
             await allocator.createEmptyHeap();
-            await allocator.createAlloc(AllocType.Node, 50);
-            const allocPointer1 = await allocator.createAlloc(AllocType.Node, 50);
-            const allocPointer2 = await allocator.createAlloc(AllocType.Node, 50);
-            const allocPointer3 = await allocator.createAlloc(AllocType.Node, 50);
-            await allocator.createAlloc(AllocType.Node, 50);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
+            const allocPointer1 = await allocator.createAlloc(AllocType.ContentNode, 50);
+            const allocPointer2 = await allocator.createAlloc(AllocType.ContentNode, 50);
+            const allocPointer3 = await allocator.createAlloc(AllocType.ContentNode, 50);
+            await allocator.createAlloc(AllocType.ContentNode, 50);
             await allocator.deleteAlloc(allocPointer1);
             await allocator.deleteAlloc(allocPointer3);
             await allocator.deleteAlloc(allocPointer2);
