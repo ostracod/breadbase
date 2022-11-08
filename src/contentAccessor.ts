@@ -18,7 +18,7 @@ export const contentTypeMap: Map<AllocType, TailStructType<TreeContent>> = new M
 
 export class ContentAccessor<T = any> extends StorageAccessor {
     heapAllocator: HeapAllocator;
-    manager: ContentTreeManager;
+    manager: ContentTreeManager<T>;
     nodeAccessor: ContentNodeAccessor<T>;
     content: StoragePointer<TreeContent<T>>;
     tailStructType: TailStructType<TreeContent<T>>;
@@ -26,13 +26,13 @@ export class ContentAccessor<T = any> extends StorageAccessor {
     items: T[];
     
     async init(
-        manager: ContentTreeManager,
+        manager: ContentTreeManager<T>,
         content: StoragePointer<TreeContent<T>>,
     ): Promise<void> {
         this.manager = manager;
         this.heapAllocator = this.manager.heapAllocator;
         this.setStorage(this.manager.storage);
-        this.nodeAccessor = this.manager.createNodeAccessor<T>();
+        this.nodeAccessor = this.manager.nodeAccessor;
         this.content = content;
         this.fieldValues = {};
         this.items = [];

@@ -22,7 +22,7 @@ const createArray = (length: number, fillValue: number): number[] => (
 
 class TreeTester extends StorageAccessor {
     allocator: HeapAllocator;
-    manager: ContentTreeManager;
+    manager: ContentTreeManager<number>;
     nodeAccessor: ContentNodeAccessor<number>;
     nodes: StoragePointer<ContentNode<number>>[];
     root: StoragePointer<ContentRoot<number>>;
@@ -31,12 +31,12 @@ class TreeTester extends StorageAccessor {
         this.setStorage(new MemoryStorage());
         this.allocator = new HeapAllocator(this.storage);
         await this.allocator.createEmptyHeap();
-        this.manager = new ContentTreeManager(this.allocator);
-        this.nodeAccessor = this.manager.createNodeAccessor<number>();
         this.root = (await this.allocator.createAlloc(
             AllocType.String,
             contentRootType.getSize() - allocType.getSize(),
         )).convert(contentRootType);
+        this.manager = new ContentTreeManager(this.allocator, this.root);
+        this.nodeAccessor = this.manager.nodeAccessor;
         this.nodes = [];
     }
     

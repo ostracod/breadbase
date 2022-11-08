@@ -12,16 +12,24 @@ import { ContentNodeAccessor } from "./nodeAccessor.js";
 
 const nullContentNodePointer = createNullPointer(contentNodeType);
 
-export class ContentTreeManager extends StorageAccessor {
+export class ContentTreeManager<T> extends StorageAccessor {
     heapAllocator: HeapAllocator;
+    nodeAccessor: ContentNodeAccessor<T>;
+    root: StoragePointer<ContentRoot<T>>;
     
-    constructor(heapAllocator: HeapAllocator) {
+    constructor(heapAllocator: HeapAllocator, root: StoragePointer<ContentRoot<T>>) {
         super();
         this.heapAllocator = heapAllocator;
         this.setStorage(this.heapAllocator.storage);
+        this.nodeAccessor = new ContentNodeAccessor<T>(this.storage);
+        this.root = root;
     }
     
-    async createContentAccessor<T>(
+    async getRootChild(): Promise<StoragePointer<ContentNode<T>>> {
+        return await this.readStructField(this.root, "child");
+    }
+    
+    async createContentAccessor(
         content: StoragePointer<TreeContent<T>>,
     ): Promise<ContentAccessor<T>> {
         const output = new ContentAccessor<T>();
@@ -29,31 +37,28 @@ export class ContentTreeManager extends StorageAccessor {
         return output;
     }
     
-    async createContentAccessorByNode<T>(
+    async createContentAccessorByNode(
         node: StoragePointer<ContentNode<T>>,
     ): Promise<ContentAccessor<T>> {
         const content = await this.readStructField(node, "treeContent");
         return await this.createContentAccessor(content);
     }
     
-    createNodeAccessor<T>(): ContentNodeAccessor<T> {
-        return new ContentNodeAccessor<T>(this.storage);
-    }
-    
-    async findItemByIndex<T>(
-        root: StoragePointer<ContentRoot<T>>,
+    async findItemByIndex(
         index: number,
     ): Promise<ContentItem<T>> {
-        const nodeAccessor = this.createNodeAccessor<T>();
         let startIndex = 0;
-        let node = await this.readStructField(root, "child");
+        let node = await this.getRootChild();
         while (true) {
             const content = await this.readStructField(node, "treeContent");
             const itemCount = await this.readStructField(content, "itemCount");
-            const leftChild = await nodeAccessor.readBranchesField(node, "leftChild");
+            const leftChild = await this.nodeAccessor.readBranchesField(node, "leftChild");
             let leftIndex = startIndex;
             if (!leftChild.isNull()) {
-                leftIndex += await nodeAccessor.readBranchesField(leftChild, "totalLength");
+                leftIndex += await this.nodeAccessor.readBranchesField(
+                    leftChild,
+                    "totalLength",
+                );
             }
             if (index >= leftIndex) {
                 const rightIndex = leftIndex + itemCount;
@@ -62,7 +67,7 @@ export class ContentTreeManager extends StorageAccessor {
                     return { accessor, index: index - leftIndex };
                 } else {
                     startIndex = rightIndex;
-                    node = await nodeAccessor.readBranchesField(node, "rightChild");
+                    node = await this.nodeAccessor.readBranchesField(node, "rightChild");
                 }
             } else {
                 node = leftChild;
@@ -70,7 +75,7 @@ export class ContentTreeManager extends StorageAccessor {
         }
     }
     
-    async iterateContent<T>(
+    async iterateContent(
         node: StoragePointer<ContentNode<T>>,
         direction: TreeDirection,
         handle: (value: T) => Promise<boolean>,
@@ -96,13 +101,12 @@ export class ContentTreeManager extends StorageAccessor {
         return false;
     }
     
-    async iterateTreeHelper<T>(
+    async iterateTreeHelper(
         node: StoragePointer<ContentNode<T>>,
         direction: TreeDirection,
         handle: (value: T) => Promise<boolean>,
     ): Promise<boolean> {
-        const nodeAccessor = this.createNodeAccessor<T>();
-        const previousChild = await nodeAccessor.readBranchesField(
+        const previousChild = await this.nodeAccessor.readBranchesField(
             node,
             allocUtils.getOppositeChildKey(direction),
         );
@@ -116,7 +120,7 @@ export class ContentTreeManager extends StorageAccessor {
         if (result) {
             return true;
         }
-        const nextChild = await nodeAccessor.readBranchesField(
+        const nextChild = await this.nodeAccessor.readBranchesField(
             node,
             allocUtils.getChildKey(direction),
         );
@@ -127,43 +131,39 @@ export class ContentTreeManager extends StorageAccessor {
         }
     }
     
-    async iterateTreeForward<T>(
-        root: StoragePointer<ContentRoot<T>>,
+    async iterateTreeForward(
         // When return value is true, iteration will stop early.
         handle: (value: T) => Promise<boolean>,
     ): Promise<void> {
-        const node = await this.readStructField(root, "child");
+        const node = await this.getRootChild();
         await this.iterateTreeHelper(node, TreeDirection.Forward, handle);
     }
     
-    async iterateTreeBackward<T>(
-        root: StoragePointer<ContentRoot<T>>,
+    async iterateTreeBackward(
         // When return value is true, iteration will stop early.
         handle: (value: T) => Promise<boolean>,
     ): Promise<void> {
-        const node = await this.readStructField(root, "child");
+        const node = await this.getRootChild();
         await this.iterateTreeHelper(node, TreeDirection.Backward, handle);
     }
     
     // Returns the first item for which `compare` returns 0 or 1.
-    async findItemByComparison<T>(
-        // Must be sorted by `compare`.
-        root: StoragePointer<ContentRoot<T>>,
+    // `this.root` must be sorted by `compare`.
+    async findItemByComparison(
         // `compare` returns 0 if `value` has match, 1 if `value`
         // is too late, and -1 if `value` is too early.
         compare: (value: T) => Promise<number>,
     ): Promise<ContentItem<T>> {
-        const nodeAccessor = this.createNodeAccessor<T>();
-        let node = await this.readStructField(root, "child");
+        let node = await this.getRootChild();
         let startNode: StoragePointer<ContentNode<T>> = null;
         while (!node.isNull()) {
             const contentAccessor = await this.createContentAccessorByNode(node);
             const value = await contentAccessor.getItem(0);
             if (await compare(value) < 0) {
                 startNode = node;
-                node = await nodeAccessor.readBranchesField(node, "rightChild");
+                node = await this.nodeAccessor.readBranchesField(node, "rightChild");
             } else {
-                node = await nodeAccessor.readBranchesField(node, "leftChild");
+                node = await this.nodeAccessor.readBranchesField(node, "leftChild");
             }
         }
         node = startNode;
@@ -177,12 +177,12 @@ export class ContentTreeManager extends StorageAccessor {
                     return { accessor: contentAccessor, index };
                 }
             }
-            node = await nodeAccessor.getNextNode(node);
+            node = await this.nodeAccessor.getNextNode(node);
         }
         return null;
     }
     
-    async createContent<T>(
+    async createContent(
         parent: StoragePointer<ContentNode<T>>,
         contentAllocType: AllocType,
         bufferLength: number,
@@ -203,12 +203,11 @@ export class ContentTreeManager extends StorageAccessor {
         return output;
     }
     
-    async createNode<T>(
+    async createNode(
         contentAllocType: AllocType,
         bufferLength: number,
         values: T[],
     ): Promise<StoragePointer<ContentNode<T>>> {
-        const nodeAccessor = this.createNodeAccessor<T>();
         const output = (await this.heapAllocator.createAlloc(
             AllocType.ContentNode,
             contentNodeType.getSize() - allocType.getSize(),
@@ -220,23 +219,30 @@ export class ContentTreeManager extends StorageAccessor {
             values,
         );
         await this.writeStructField(output, "treeContent", content);
-        await nodeAccessor.writeBranchesField(output, "leftChild", nullContentNodePointer);
-        await nodeAccessor.writeBranchesField(output, "rightChild", nullContentNodePointer);
-        await nodeAccessor.writeBranchesField(output, "maximumDepth", 1);
-        await nodeAccessor.writeBranchesField(output, "totalLength", values.length);
+        await this.nodeAccessor.writeBranchesField(
+            output, "leftChild", nullContentNodePointer,
+        );
+        await this.nodeAccessor.writeBranchesField(
+            output, "rightChild", nullContentNodePointer,
+        );
+        await this.nodeAccessor.writeBranchesField(
+            output, "maximumDepth", 1,
+        );
+        await this.nodeAccessor.writeBranchesField(
+            output, "totalLength", values.length,
+        );
         return output;
     }
     
-    async deleteNode<T>(node: StoragePointer<ContentNode<T>>) {
-        const nodeAccessor = this.createNodeAccessor<T>();
-        await nodeAccessor.removeNode(node);
+    async deleteNode(node: StoragePointer<ContentNode<T>>) {
+        await this.nodeAccessor.removeNode(node);
         const content = await this.readStructField(node, "treeContent");
         await this.heapAllocator.deleteAlloc(content);
         await this.heapAllocator.deleteAlloc(node);
     }
     
     // `values` will be inserted before `nextItem`.
-    async insertItems<T>(values: T[], nextItem: ContentItem<T>): Promise<void> {
+    async insertItems(values: T[], nextItem: ContentItem<T>): Promise<void> {
         const { accessor, index } = nextItem;
         let bufferLength = await accessor.getBufferLength();
         const itemCount = await accessor.getField("itemCount");
@@ -285,13 +291,12 @@ export class ContentTreeManager extends StorageAccessor {
     }
     
     // `startItem` is inclusive, and `endItem` is exclusive.
-    async deleteItems<T>(
+    async deleteItems(
         startItem: ContentItem<T>,
         endItem: ContentItem<T>,
     ): Promise<void> {
         const { accessor: startAccessor, index: startIndex } = startItem;
         const { accessor: endAccessor, index: endIndex } = endItem;
-        const nodeAccessor = this.createNodeAccessor<T>();
         const startNode = await startAccessor.getField("parent");
         const endNode = await endAccessor.getField("parent");
         // We iterate backward here, because `deleteItemsHelper` may borrow
@@ -306,7 +311,7 @@ export class ContentTreeManager extends StorageAccessor {
                 previousNode = null;
                 tempStartIndex = startIndex;
             } else {
-                previousNode = await nodeAccessor.getPreviousNode(node);
+                previousNode = await this.nodeAccessor.getPreviousNode(node);
                 tempStartIndex = 0;
             }
             let tempEndIndex: number;
