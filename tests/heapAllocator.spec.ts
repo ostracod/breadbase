@@ -59,7 +59,7 @@ describe("HeapAllocator", () => {
                 spanSize: 55,
                 degree: 3,
                 isEmpty: false,
-                type: 1,
+                type: AllocType.ContentNode,
                 allocSize: 50,
             });
             const finalSpan = await allocator.read(finalSpanPointer);
@@ -90,7 +90,7 @@ describe("HeapAllocator", () => {
                 spanSize: 55,
                 degree: 3,
                 isEmpty: false,
-                type: 1,
+                type: AllocType.ContentNode,
                 allocSize: 50,
             });
             const emptySpanPointer = new StoragePointer(
@@ -127,7 +127,7 @@ describe("HeapAllocator", () => {
                 spanSize: 70,
                 degree: 4,
                 isEmpty: false,
-                type: 1,
+                type: AllocType.ContentNode,
                 allocSize: 50,
             });
         });
@@ -147,7 +147,7 @@ describe("HeapAllocator", () => {
                 spanSize: 75,
                 degree: 4,
                 isEmpty: false,
-                type: 1,
+                type: AllocType.ContentNode,
                 allocSize: 70,
             });
         });
@@ -249,7 +249,7 @@ describe("HeapAllocator", () => {
                 spanSize: 55,
                 degree: 3,
                 isEmpty: false,
-                type: 1,
+                type: AllocType.ContentNode,
                 allocSize: 50,
             });
         });

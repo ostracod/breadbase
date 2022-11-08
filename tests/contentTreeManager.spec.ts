@@ -32,7 +32,7 @@ class TreeTester extends StorageAccessor {
         this.allocator = new HeapAllocator(this.storage);
         await this.allocator.createEmptyHeap();
         this.root = (await this.allocator.createAlloc(
-            AllocType.String,
+            AllocType.AsciiStringRoot,
             contentRootType.getSize() - allocType.getSize(),
         )).convert(contentRootType);
         this.manager = new ContentTreeManager(this.allocator, this.root);

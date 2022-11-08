@@ -1,6 +1,9 @@
 
 import { Path, Value, Index } from "./types.js";
+import { ValueSlot, ContentRoot, DictEntry } from "./builtTypes.js";
+import { ValueSlotType } from "./constants.js";
 import { Storage, FileStorage } from "./storage.js";
+import { StoragePointer } from "./storagePointer.js";
 import { StorageAccessor } from "./storageAccessor.js";
 import { HeapAllocator } from "./heapAllocator.js";
 
@@ -65,6 +68,59 @@ export class BreadBase extends StorageAccessor {
         } else {
             await this.initWithDb();
         }
+    }
+    
+    async allocateBuffer(buffer: Buffer): Promise<StoragePointer<ContentRoot<number>>> {
+        // TODO: Implement.
+        return null;
+    }
+    
+    async allocateString(text: string): Promise<StoragePointer<ContentRoot<number>>> {
+        // TODO: Implement.
+        return null;
+    }
+    
+    async allocateList(list: Value[]): Promise<StoragePointer<ContentRoot<ValueSlot>>> {
+        // TODO: Implement.
+        return null;
+    }
+    
+    async allocateDict(text: string): Promise<StoragePointer<ContentRoot<DictEntry>>> {
+        // TODO: Implement.
+        return null;
+    }
+    
+    async allocateValue(value: Value): Promise<ValueSlot> {
+        let valueSlotType: ValueSlotType;
+        const data = Buffer.alloc(8);
+        const typeText = (typeof value);
+        if (typeText === "boolean") {
+            valueSlotType = ValueSlotType.Boolean;
+            data.writeInt8(value ? 1 : 0);
+        } else if (typeText === "number") {
+            valueSlotType = ValueSlotType.Number;
+            data.writeDoubleLE(value);
+        } else if (value === null) {
+            valueSlotType = ValueSlotType.Null;
+        } else {
+            valueSlotType = ValueSlotType.TreeRoot;
+            let root: StoragePointer<ContentRoot>;
+            if (typeText === "string") {
+                root = await this.allocateString(value);
+            } else if (typeText === "object") {
+                if (Buffer.isBuffer(value)) {
+                    root = await this.allocateBuffer(value);
+                } else if (Array.isArray(value)) {
+                    root = await this.allocateList(value);
+                } else {
+                    root = await this.allocateDict(value);
+                }
+            } else {
+                throw new Error(`Cannot allocate the value ${value}.`);
+            }
+            root.getPointerType().write(data, 0, root);
+        }
+        return { type: valueSlotType, data };
     }
 }
 

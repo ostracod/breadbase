@@ -1,7 +1,7 @@
 
 import { defaultContentSize, TreeDirection } from "./constants.js";
-import { TailStructType } from "./dataType.js";
-import { allocType, TreeContent, treeContentType, asciiStringContentType } from "./builtTypes.js";
+import { DataType, TailStructType } from "./dataType.js";
+import { allocType, TreeContent, treeContentType, bufferContentType, asciiStringContentType, utf16StringContentType, listContentType, dictContentType } from "./builtTypes.js";
 import { AllocType } from "./constants.js";
 import { StoragePointer } from "./storagePointer.js";
 import { StorageAccessor } from "./storageAccessor.js";
@@ -9,12 +9,18 @@ import { HeapAllocator } from "./heapAllocator.js";
 import { ContentTreeManager } from "./contentTreeManager.js";
 import { ContentNodeAccessor } from "./nodeAccessor.js";
 
-export const contentTypeMap: Map<AllocType, TailStructType<TreeContent>> = new Map([
-    [
-        AllocType.AsciiStringContent,
-        asciiStringContentType.dereference() as TailStructType<TreeContent>,
-    ],
-]);
+const contentTypePairs: [AllocType, DataType<TreeContent>][] = [
+    [AllocType.BufferContent, bufferContentType],
+    [AllocType.AsciiStringContent, asciiStringContentType],
+    [AllocType.Utf16StringContent, utf16StringContentType],
+    [AllocType.ListContent, listContentType],
+    [AllocType.DictContent, dictContentType],
+];
+export const contentTypeMap: Map<AllocType, TailStructType<TreeContent>> = new Map(
+    (contentTypePairs).map((pair) => [
+        pair[0], pair[1].dereference() as TailStructType<TreeContent>,
+    ]),
+);
 
 export class ContentAccessor<T = any> extends StorageAccessor {
     heapAllocator: HeapAllocator;

@@ -74,7 +74,8 @@
         "fields": [
             { "name": "type", "type": {
                 "class": "IntType",
-                "size": 1
+                "size": 1,
+                "enumType": "ValueSlotType"
             } },
             { "name": "data", "type": {
                 "class": "BufferType",
