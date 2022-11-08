@@ -77,12 +77,8 @@
                 "size": 1
             } },
             { "name": "data", "type": {
-                "class": "ArrayType",
-                "elementType": {
-                    "class": "IntType",
-                    "size": 1
-                },
-                "length": 8
+                "class": "BufferType",
+                "size": 8
             } }
         ]
     } },

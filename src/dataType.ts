@@ -1,6 +1,6 @@
 
 import { Struct, TailStruct, TailStructElement } from "./internalTypes.js";
-import { ParentTypes, ParentDataType, BaseDataType, BaseParamType, BaseReferenceType, BaseLiteralType, BaseAnyType, BaseBoolType, BaseIntType, BaseArrayType, BaseStoragePointerType, ParentMemberField, BaseMemberField, BaseStructType, BaseTailStructType, BaseTypeDeclaration } from "./baseTypes.js";
+import { ParentTypes, ParentDataType, BaseDataType, BaseParamType, BaseReferenceType, BaseLiteralType, BaseAnyType, BaseBoolType, BaseIntType, BaseBufferType, BaseArrayType, BaseStoragePointerType, ParentMemberField, BaseMemberField, BaseStructType, BaseTailStructType, BaseTypeDeclaration } from "./baseTypes.js";
 import { storagePointerSize } from "./constants.js";
 import { StoragePointer } from "./storagePointer.js";
 
@@ -171,6 +171,27 @@ export class StoragePointerType<T> extends LiteralType<StoragePointer<T>> {
     
     write(data: Buffer, offset: number, value: StoragePointer<T>): void {
         data.writeIntLE(value.index, offset, storagePointerSize);
+    }
+}
+
+export class BufferType extends LiteralType<Buffer> {
+    base: BaseBufferType<BuildTypes>;
+    
+    init(size: number): this {
+        this.initWithBase(new BaseBufferType<BuildTypes>(this, size));
+        return this;
+    }
+    
+    getSize(): number {
+        return this.base.size;
+    }
+    
+    read(data: Buffer, offset: number): Buffer {
+        return data.subarray(offset, offset + this.base.size);
+    }
+    
+    write(data: Buffer, offset: number, value: Buffer): void {
+        value.copy(data, offset);
     }
 }
 

@@ -162,6 +162,15 @@ export class BaseStoragePointerType<T extends ParentTypes> extends BaseLiteralTy
     }
 }
 
+export class BaseBufferType<T extends ParentTypes> extends BaseLiteralType<T> {
+    size: number;
+    
+    constructor(parent: T["dataType"], size: number) {
+        super(parent);
+        this.size = size;
+    }
+}
+
 export class BaseArrayType<T extends ParentTypes> extends BaseLiteralType<T> {
     elementType: BaseDataType<T>;
     length: number;

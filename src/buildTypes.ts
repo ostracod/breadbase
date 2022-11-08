@@ -2,7 +2,7 @@
 import * as fs from "fs";
 import * as pathUtils from "path";
 import { fileURLToPath } from "url";
-import { ParentTypes, ParentDataType, BaseDataType, BaseParamType, BaseReferenceType, BaseLiteralType, BaseAnyType, BaseBoolType, BaseIntType, BaseStoragePointerType, BaseArrayType, ParentMemberField, BaseMemberField, BaseStructType, BaseTailStructType, BaseTypeDeclaration } from "./baseTypes.js";
+import { ParentTypes, ParentDataType, BaseDataType, BaseParamType, BaseReferenceType, BaseLiteralType, BaseAnyType, BaseBoolType, BaseIntType, BaseStoragePointerType, BaseBufferType, BaseArrayType, ParentMemberField, BaseMemberField, BaseStructType, BaseTailStructType, BaseTypeDeclaration } from "./baseTypes.js";
 
 interface NamedTypeData {
     name: string;
@@ -19,6 +19,10 @@ interface LiteralTypeData {
 interface IntTypeData extends LiteralTypeData {
     size: number;
     enumType?: string;
+}
+
+interface BufferTypeData extends LiteralTypeData {
+    size: number;
 }
 
 interface ArrayTypeData extends LiteralTypeData {
@@ -290,6 +294,26 @@ class StoragePointerType extends LiteralType {
     }
 }
 
+class BufferType extends LiteralType {
+    base: BaseBufferType<PrebuildTypes>;
+    
+    initWithData(scope: Scope, data: BufferTypeData): void {
+        this.init(data.size);
+    }
+    
+    init(size: number): void {
+        this.initWithBase(new BaseBufferType<PrebuildTypes>(this, size));
+    }
+    
+    getNestedTypeCode(): string {
+        return "Buffer";
+    }
+    
+    getNestedInstanceCode(): string {
+        return `(new BufferType()).init(${this.base.size})`;
+    }
+}
+
 class ArrayType extends LiteralType {
     base: BaseArrayType<PrebuildTypes>;
     
@@ -544,7 +568,7 @@ class TailStructType extends StructType {
 type InitTypeConstructor = new () => InitDataType;
 
 const literalTypeMap: { [name: string]: InitTypeConstructor } = {
-    AnyType, BoolType, IntType, ArrayType, StoragePointerType, StructType, TailStructType,
+    AnyType, BoolType, IntType, BufferType, ArrayType, StoragePointerType, StructType, TailStructType,
 };
 
 class TypeDeclaration {
@@ -617,7 +641,7 @@ const convertDataToType = (scope: Scope, inputData: TypeData): DataType => {
     return output;
 };
 
-const resultText = ["\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount, AllocType } from \"./constants.js\";\nimport { addTypeDeclaration, ParamType, ReferenceType, anyType, boolType, IntType, StoragePointerType, ArrayType, MemberField, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
+const resultText = ["\nimport { Struct, TailStruct } from \"./internalTypes.js\";\nimport { spanDegreeAmount, AllocType } from \"./constants.js\";\nimport { addTypeDeclaration, ParamType, ReferenceType, anyType, boolType, IntType, StoragePointerType, BufferType, ArrayType, MemberField, StructType, TailStructType } from \"./dataType.js\";\nimport { StoragePointer } from \"./storagePointer.js\";\n"];
 
 const baseDeclarationMap = new Map<string, BaseTypeDeclaration<PrebuildTypes>>();
 const typeDeclarations = typeDeclarationsData.map((data) => {

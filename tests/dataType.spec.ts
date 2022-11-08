@@ -1,6 +1,28 @@
 
 import { Struct, TailStruct } from "../src/internalTypes.js";
-import { BoolType, boolType, IntType, ArrayType, MemberField, StructType, TailStructType } from "../src/dataType.js";
+import { BoolType, boolType, IntType, BufferType, ArrayType, MemberField, StructType, TailStructType } from "../src/dataType.js";
+
+describe("BufferType", () => {
+    const bufferType = (new BufferType()).init(5);
+    
+    describe("read", () => {
+        it("reads the buffer from a buffer", () => {
+            const data = Buffer.from([99, 99, 99, 5, 0, 10, 0, 15, 99, 99]);
+            const value = bufferType.read(data, 3);
+            expect(Array.from(value)).toEqual([5, 0, 10, 0, 15]);
+        });
+    });
+    
+    describe("write", () => {
+        it("writes the buffer to a buffer", () => {
+            const data = Buffer.alloc(10, 99);
+            bufferType.write(data, 3, Buffer.from([5, 0, 10, 0, 15]));
+            expect(
+                data.compare(Buffer.from([99, 99, 99, 5, 0, 10, 0, 15, 99, 99])),
+            ).toEqual(0);
+        });
+    });
+});
 
 describe("ArrayType", () => {
     const arrayType = (new ArrayType()).init((new IntType()).init(2), 3);
