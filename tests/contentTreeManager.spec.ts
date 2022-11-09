@@ -1,6 +1,6 @@
 
 import { ContentItem, NodeChildKey } from "../src/internalTypes.js";
-import { allocType, ContentRoot, contentRootType, ContentNode, contentNodeType } from "../src/builtTypes.js";
+import { ContentRoot, contentRootType, ContentNode, contentNodeType } from "../src/builtTypes.js";
 import { defaultContentSize, AllocType, TreeDirection } from "../src/constants.js";
 import { MemoryStorage } from "../src/storage.js";
 import { StoragePointer, createNullPointer } from "../src/storagePointer.js";
@@ -31,10 +31,10 @@ class TreeTester extends StorageAccessor {
         this.setStorage(new MemoryStorage());
         this.allocator = new HeapAllocator(this.storage);
         await this.allocator.createEmptyHeap();
-        this.root = (await this.allocator.createAlloc(
+        this.root = await this.allocator.createSuperAlloc(
             AllocType.AsciiStringRoot,
-            contentRootType.getSize() - allocType.getSize(),
-        )).convert(contentRootType);
+            contentRootType,
+        );
         this.manager = new ContentTreeManager(this.allocator, this.root);
         this.nodeAccessor = this.manager.nodeAccessor;
         this.nodes = [];
@@ -46,7 +46,7 @@ class TreeTester extends StorageAccessor {
             const node = await this.manager.createNode(AllocType.AsciiStringContent, 3, []);
             this.nodes.push(node);
         }
-        await this.nodeAccessor.setRootChild(this.root, this.nodes[0]);
+        await this.manager.setRootChild(this.nodes[0]);
     }
     
     async initWithContents(contents: TestContent[]): Promise<void> {
@@ -60,7 +60,7 @@ class TreeTester extends StorageAccessor {
             );
             this.nodes.push(node);
             if (index === 0) {
-                await this.nodeAccessor.setRootChild(this.root, node);
+                await this.manager.setRootChild(node);
             } else {
                 await this.insertNode(index, index - 1, TreeDirection.Backward);
             }

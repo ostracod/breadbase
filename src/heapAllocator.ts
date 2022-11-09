@@ -1,4 +1,6 @@
 
+import { TailStruct } from "./internalTypes.js";
+import { DataType, TailStructType } from "./dataType.js";
 import { spanDegreeAmount, AllocType } from "./constants.js";
 import * as allocUtils from "./allocUtils.js";
 import { StoragePointer, createNullPointer, getArrayElementPointer, getStructFieldPointer } from "./storagePointer.js";
@@ -237,6 +239,27 @@ export class HeapAllocator extends StorageAccessor {
                 nextByDegree,
             },
         );
+    }
+    
+    async createSuperAlloc<T extends Alloc>(
+        typeNumber: AllocType,
+        structType: DataType<T>,
+    ): Promise<StoragePointer<T>> {
+        return (await this.createAlloc(
+            typeNumber,
+            structType.getSize() - allocType.getSize(),
+        )).convert(structType);
+    }
+    
+    async createSuperTailAlloc<T extends Alloc & TailStruct>(
+        typeNumber: AllocType,
+        tailStructType: TailStructType<T>,
+        tailLength: number,
+    ): Promise<StoragePointer<T>> {
+        return (await this.createAlloc(
+            typeNumber,
+            tailStructType.getSizeWithTail(tailLength) - allocType.getSize(),
+        )).convert(tailStructType);
     }
 }
 

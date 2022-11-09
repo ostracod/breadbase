@@ -3,7 +3,7 @@ import { ContentItem } from "./internalTypes.js";
 import { AllocType, TreeDirection } from "./constants.js";
 import * as allocUtils from "./allocUtils.js";
 import { TailStructType } from "./dataType.js";
-import { allocType, ContentRoot, ContentNode, contentNodeType, TreeContent } from "./builtTypes.js";
+import { ContentRoot, ContentNode, contentNodeType, TreeContent } from "./builtTypes.js";
 import { StoragePointer, createNullPointer } from "./storagePointer.js";
 import { StorageAccessor } from "./storageAccessor.js";
 import { HeapAllocator } from "./heapAllocator.js";
@@ -27,6 +27,10 @@ export class ContentTreeManager<T> extends StorageAccessor {
     
     async getRootChild(): Promise<StoragePointer<ContentNode<T>>> {
         return await this.readStructField(this.root, "child");
+    }
+    
+    async setRootChild(node: StoragePointer<ContentNode<T>>): Promise<void> {
+        await this.nodeAccessor.setRootChild(this.root, node);
     }
     
     async createContentAccessor(
@@ -189,10 +193,11 @@ export class ContentTreeManager<T> extends StorageAccessor {
         values: T[],
     ): Promise<StoragePointer<TreeContent<T>>> {
         const contentType = contentTypeMap.get(contentAllocType) as TailStructType<TreeContent<T>>;
-        const output = (await this.heapAllocator.createAlloc(
+        const output = await this.heapAllocator.createSuperTailAlloc(
             contentAllocType,
-            contentType.getSizeWithTail(bufferLength) - allocType.getSize(),
-        )).convert(contentType);
+            contentType,
+            bufferLength,
+        );
         await this.writeStructFields(output, {
             parent,
             itemCount: values.length,
@@ -208,10 +213,10 @@ export class ContentTreeManager<T> extends StorageAccessor {
         bufferLength: number,
         values: T[],
     ): Promise<StoragePointer<ContentNode<T>>> {
-        const output = (await this.heapAllocator.createAlloc(
+        const output = await this.heapAllocator.createSuperAlloc(
             AllocType.ContentNode,
-            contentNodeType.getSize() - allocType.getSize(),
-        )).convert(contentNodeType);
+            contentNodeType,
+        );
         const content = await this.createContent(
             output,
             contentAllocType,

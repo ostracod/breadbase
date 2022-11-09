@@ -102,11 +102,11 @@
             }
         ]
     } },
-    { "name": "ListRoot", "type": {
+    { "name": "ListRoot", "paramTypes": ["T"], "type": {
         "class": "StructType",
         "superType": {
             "name": "TreeRoot",
-            "paramTypes": ["Alloc"]
+            "paramTypes": ["T"]
         },
         "fields": [
             { "name": "firstIndex", "type": {

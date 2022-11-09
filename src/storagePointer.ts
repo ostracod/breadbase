@@ -48,15 +48,31 @@ export const getStructFieldPointer = <T1 extends Struct, T2 extends string & (ke
     return new StoragePointer(pointer.index + field.offset, field.type);
 };
 
+export const getTailPointerHelper = <T>(
+    pointer: StoragePointer<TailStruct<T>>,
+): { tailIndex: number, elementType: DataType<T> } => {
+    const tailStructType = pointer.type.dereference() as TailStructType<TailStruct<T>>;
+    const tailIndex = tailStructType.getTailOffset(pointer.index);
+    const elementType = tailStructType.getElementType();
+    return { tailIndex, elementType };
+};
+
 export const getTailElementPointer = <T>(
     pointer: StoragePointer<TailStruct<T>>,
     index: number,
 ): StoragePointer<T> => {
-    const tailStructType = pointer.type.dereference() as TailStructType<TailStruct<T>>;
-    const tailIndex = tailStructType.getTailOffset(pointer.index);
-    const elementType = tailStructType.getElementType();
+    const { tailIndex, elementType } = getTailPointerHelper(pointer);
     const elementSize = elementType.getSize();
     return new StoragePointer(tailIndex + index * elementSize, elementType);
+};
+
+export const getTailPointer = <T>(
+    pointer: StoragePointer<TailStruct<T>>,
+    length: number,
+): StoragePointer<T[]> => {
+    const { tailIndex, elementType } = getTailPointerHelper(pointer);
+    const arrayType = (new ArrayType<T>()).init(elementType, length);
+    return new StoragePointer(tailIndex, arrayType);
 };
 
 export const getBranchesFieldPointer = <T1 extends ContentNode, T2 extends string & (keyof TreeBranches)>(node: StoragePointer<T1>, name: T2): StoragePointer<T1["branches"][T2]> => (
