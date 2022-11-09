@@ -28,7 +28,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
     nodeAccessor: ContentNodeAccessor<T>;
     content: StoragePointer<TreeContent<T>>;
     tailStructType: TailStructType<TreeContent<T>>;
-    fieldValues: Partial<TreeContent>;
+    fieldValues: Partial<TreeContent<T>>;
     items: T[];
     
     async init(
@@ -49,18 +49,18 @@ export class ContentAccessor<T = any> extends StorageAccessor {
     
     async getField<T2 extends string & (keyof TreeContent)>(
         name: T2,
-    ): Promise<TreeContent[T2]> {
+    ): Promise<TreeContent<T>[T2]> {
         let value = this.fieldValues[name];
         if (typeof value === "undefined") {
             value = await this.readStructField(this.content, name);
             this.fieldValues[name] = value;
         }
-        return value as TreeContent[T2];
+        return value as TreeContent<T>[T2];
     }
     
     async setField<T2 extends string & (keyof TreeContent)>(
         name: T2,
-        value: TreeContent[T2],
+        value: TreeContent<T>[T2],
     ): Promise<void> {
         await this.writeStructField(this.content, name, value);
         this.fieldValues[name] = value;

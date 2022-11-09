@@ -70,7 +70,7 @@ const getTypeInstanceName = (typeName: string): string => uncapitalize(typeName)
 
 const getParamTypesCode = (paramTypeNames: string[]): string => {
     if (paramTypeNames.length > 0) {
-        return `<${paramTypeNames.map((name) => name + " = any").join(", ")}>`;
+        return `<${paramTypeNames.map((name) => name + " = unknown").join(", ")}>`;
     } else {
         return "";
     }
@@ -85,7 +85,7 @@ interface PrebuildTypes extends ParentTypes {
 abstract class DataType implements ParentDataType<PrebuildTypes> {
     base: BaseDataType<PrebuildTypes>;
     
-    abstract getNestedTypeCode(): string;
+    abstract getNestedTypeCode(paramsAreUnknown: boolean): string;
     
     abstract getNestedInstanceCode(): string;
     
@@ -102,7 +102,7 @@ abstract class DataType implements ParentDataType<PrebuildTypes> {
     }
     
     getDeclarationTypeCode(name: string, paramTypeNames: string[]): string {
-        return `export type ${name}${getParamTypesCode(paramTypeNames)} = ${this.getNestedTypeCode()};`;
+        return `export type ${name}${getParamTypesCode(paramTypeNames)} = ${this.getNestedTypeCode(false)};`;
     }
     
     getDeclarationInstanceCode(name: string): string {
@@ -117,8 +117,8 @@ class ParamType extends DataType {
         this.initWithBase(new BaseParamType<PrebuildTypes>(this, name));
     }
     
-    getNestedTypeCode(): string {
-        return this.base.name;
+    getNestedTypeCode(paramsAreUnknown: boolean): string {
+        return paramsAreUnknown ? "unknown" : this.base.name;
     }
     
     getNestedInstanceCode(): string {
@@ -166,16 +166,16 @@ class ReferenceType extends InitDataType {
         ));
     }
     
-    getNestedTypeCode(): string {
+    getNestedTypeCode(paramsAreUnknown: boolean): string {
         if (this.base.paramReplacements === null) {
             return this.base.name;
         } else {
-            return `${this.base.name}<${this.base.paramReplacements.map((type) => type.parent.getNestedTypeCode()).join(", ")}>`;
+            return `${this.base.name}<${this.base.paramReplacements.map((type) => type.parent.getNestedTypeCode(paramsAreUnknown)).join(", ")}>`;
         }
     }
     
     getNestedInstanceCode(): string {
-        const resultText = [`(new ReferenceType<${this.base.name}>()).init("${this.base.name}"`];
+        const resultText = [`(new ReferenceType<${this.getNestedTypeCode(true)}>()).init("${this.base.name}"`];
         const declaration = this.base.getDeclaration();
         if (declaration.paramTypeNames.length > 0) {
             const paramReplacements = this.base.getNonNullReplacements();
@@ -204,7 +204,7 @@ class AnyType extends LiteralType {
         this.initWithBase(new BaseAnyType<PrebuildTypes>(this));
     }
     
-    getNestedTypeCode(): string {
+    getNestedTypeCode(paramsAreUnknown: boolean): string {
         return "any";
     }
     
@@ -227,7 +227,7 @@ class BoolType extends LiteralType {
         this.initWithBase(new BaseBoolType<PrebuildTypes>(this));
     }
     
-    getNestedTypeCode(): string {
+    getNestedTypeCode(paramsAreUnknown: boolean): string {
         return "boolean";
     }
     
@@ -260,7 +260,7 @@ class IntType extends LiteralType {
         return output;
     }
     
-    getNestedTypeCode(): string {
+    getNestedTypeCode(paramsAreUnknown: boolean): string {
         return (this.enumType === null) ? "number" : this.enumType;
     }
     
@@ -285,8 +285,8 @@ class StoragePointerType extends LiteralType {
         return this.base.elementType.parent;
     }
     
-    getNestedTypeCode(): string {
-        return `StoragePointer<${this.getElementType().getNestedTypeCode()}>`;
+    getNestedTypeCode(paramsAreUnknown: boolean): string {
+        return `StoragePointer<${this.getElementType().getNestedTypeCode(paramsAreUnknown)}>`;
     }
     
     getNestedInstanceCode(): string {
@@ -305,7 +305,7 @@ class BufferType extends LiteralType {
         this.initWithBase(new BaseBufferType<PrebuildTypes>(this, size));
     }
     
-    getNestedTypeCode(): string {
+    getNestedTypeCode(paramsAreUnknown: boolean): string {
         return "Buffer";
     }
     
@@ -330,8 +330,8 @@ class ArrayType extends LiteralType {
         return this.base.elementType.parent;
     }
     
-    getNestedTypeCode(): string {
-        return `${this.getElementType().getNestedTypeCode()}[]`;
+    getNestedTypeCode(paramsAreUnknown: boolean): string {
+        return `${this.getElementType().getNestedTypeCode(paramsAreUnknown)}[]`;
     }
     
     getNestedInstanceCode(): string {
@@ -341,7 +341,7 @@ class ArrayType extends LiteralType {
 
 abstract class Field {
     
-    abstract getNestedTypeCode(): string;
+    abstract getNestedTypeCode(paramsAreUnknown: boolean): string;
 }
 
 class MemberField extends Field implements ParentMemberField<PrebuildTypes> {
@@ -363,8 +363,8 @@ class MemberField extends Field implements ParentMemberField<PrebuildTypes> {
         return this.base.type.parent;
     }
     
-    getNestedTypeCode(): string {
-        return `${this.base.name}: ${this.getMemberType().getNestedTypeCode()}`;
+    getNestedTypeCode(paramsAreUnknown: boolean): string {
+        return `${this.base.name}: ${this.getMemberType().getNestedTypeCode(paramsAreUnknown)}`;
     }
     
     getNestedInstanceCode(): string {
@@ -374,7 +374,7 @@ class MemberField extends Field implements ParentMemberField<PrebuildTypes> {
 
 class FlavorField extends Field {
     
-    getNestedTypeCode(): string {
+    getNestedTypeCode(paramsAreUnknown: boolean): string {
         return "_flavor?: { name: \"Struct\" }";
     }
 }
@@ -387,8 +387,8 @@ class TailField extends Field {
         this.elementType = elementType;
     }
     
-    getNestedTypeCode(): string {
-        return `_tail: ${this.elementType.getNestedTypeCode()}[]`;
+    getNestedTypeCode(paramsAreUnknown: boolean): string {
+        return `_tail: ${this.elementType.getNestedTypeCode(paramsAreUnknown)}[]`;
     }
 }
 
@@ -470,11 +470,11 @@ class StructType extends LiteralType {
         let extensionText = this.getInterfaceName();
         const superType = this.getSuperType();
         if (superType !== null) {
-            extensionText += ", " + superType.getNestedTypeCode();
+            extensionText += ", " + superType.getNestedTypeCode(false);
         }
         resultText.push(`export interface ${name}${getParamTypesCode(paramTypeNames)} extends ${extensionText} {`);
         for (const field of this.base.subTypeFields) {
-            resultText.push(`    ${field.parent.getNestedTypeCode()};`);
+            resultText.push(`    ${field.parent.getNestedTypeCode(false)};`);
         }
         resultText.push("}");
         return resultText.join("\n");
@@ -489,9 +489,11 @@ class StructType extends LiteralType {
         return resultText.join("\n");
     }
     
-    getNestedTypeCode(): string {
+    getNestedTypeCode(paramsAreUnknown: boolean): string {
         this.initFieldsIfMissing();
-        const fieldsCode = this.allFields.map((field) => field.getNestedTypeCode());
+        const fieldsCode = this.allFields.map(
+            (field) => field.getNestedTypeCode(paramsAreUnknown),
+        );
         return `{ ${fieldsCode.join(", ")} }`;
     }
     
@@ -550,7 +552,7 @@ class TailStructType extends StructType {
     }
     
     getInterfaceName(): string {
-        return `TailStruct<${this.getElementType().getNestedTypeCode()}>`;
+        return `TailStruct<${this.getElementType().getNestedTypeCode(false)}>`;
     }
     
     getClassName(): string {

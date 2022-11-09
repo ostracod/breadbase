@@ -2,27 +2,35 @@
 import { ContentItem } from "./internalTypes.js";
 import { AllocType, TreeDirection } from "./constants.js";
 import * as allocUtils from "./allocUtils.js";
-import { TailStructType } from "./dataType.js";
-import { ContentRoot, ContentNode, contentNodeType, TreeContent } from "./builtTypes.js";
+import { DataType, TailStructType } from "./dataType.js";
+import { ContentRoot, ContentNode, TreeContent } from "./builtTypes.js";
 import { StoragePointer, createNullPointer } from "./storagePointer.js";
 import { StorageAccessor } from "./storageAccessor.js";
 import { HeapAllocator } from "./heapAllocator.js";
 import { ContentAccessor, contentTypeMap } from "./contentAccessor.js";
 import { ContentNodeAccessor } from "./nodeAccessor.js";
 
-const nullContentNodePointer = createNullPointer(contentNodeType);
-
 export class ContentTreeManager<T> extends StorageAccessor {
     heapAllocator: HeapAllocator;
+    nodeDataType: DataType<ContentNode<T>>;
     nodeAccessor: ContentNodeAccessor<T>;
     root: StoragePointer<ContentRoot<T>>;
     
-    constructor(heapAllocator: HeapAllocator, root: StoragePointer<ContentRoot<T>>) {
+    constructor(
+        heapAllocator: HeapAllocator,
+        nodeDataType: DataType<ContentNode<T>>,
+        root: StoragePointer<ContentRoot<T>>,
+    ) {
         super();
         this.heapAllocator = heapAllocator;
         this.setStorage(this.heapAllocator.storage);
-        this.nodeAccessor = new ContentNodeAccessor<T>(this.storage);
+        this.nodeDataType = nodeDataType;
         this.root = root;
+        this.nodeAccessor = new ContentNodeAccessor<T>(
+            this.storage,
+            this.nodeDataType,
+            this.root.type,
+        );
     }
     
     async getRootChild(): Promise<StoragePointer<ContentNode<T>>> {
@@ -215,7 +223,7 @@ export class ContentTreeManager<T> extends StorageAccessor {
     ): Promise<StoragePointer<ContentNode<T>>> {
         const output = await this.heapAllocator.createSuperAlloc(
             AllocType.ContentNode,
-            contentNodeType,
+            this.nodeDataType,
         );
         const content = await this.createContent(
             output,
@@ -224,6 +232,7 @@ export class ContentTreeManager<T> extends StorageAccessor {
             values,
         );
         await this.writeStructField(output, "treeContent", content);
+        const nullContentNodePointer = createNullPointer(this.nodeDataType);
         await this.nodeAccessor.writeBranchesField(
             output, "leftChild", nullContentNodePointer,
         );

@@ -1,6 +1,6 @@
 
 import { NodeChildKey } from "./internalTypes.js";
-import { Alloc, TreeRoot, treeRootType, TreeBranches, ContentNode, contentNodeType } from "./builtTypes.js";
+import { Alloc, TreeRoot, ContentRoot, TreeBranches, ContentNode } from "./builtTypes.js";
 import { DataType } from "./dataType.js";
 import { AllocType, TreeDirection } from "./constants.js";
 import * as allocUtils from "./allocUtils.js";
@@ -18,6 +18,8 @@ export abstract class NodeAccessor<T extends Alloc> extends StorageAccessor {
     abstract getNodeAllocType(): AllocType;
     
     abstract getNodeDataType(): DataType<T>;
+    
+    abstract getRootDataType(): DataType<TreeRoot<T>>;
     
     abstract getBranches(node: StoragePointer<T>): StoragePointer<TreeBranches<T>>;
     
@@ -215,7 +217,7 @@ export abstract class NodeAccessor<T extends Alloc> extends StorageAccessor {
             const node = parent.convert(this.getNodeDataType());
             await this.replaceNodeChild(node, oldChild, newChild);
         } else {
-            const root = parent.convert(treeRootType);
+            const root = parent.convert(this.getRootDataType());
             await this.setRootChild(root, newChild);
         }
     }
@@ -328,13 +330,29 @@ export abstract class NodeAccessor<T extends Alloc> extends StorageAccessor {
 }
 
 export class ContentNodeAccessor<T> extends NodeAccessor<ContentNode<T>> {
+    nodeDataType: DataType<ContentNode<T>>;
+    rootDataType: DataType<ContentRoot<T>>;
+    
+    constructor(
+        storage: Storage,
+        nodeDataType: DataType<ContentNode<T>>,
+        rootDataType: DataType<ContentRoot<T>>,
+    ) {
+        super(storage);
+        this.nodeDataType = nodeDataType;
+        this.rootDataType = rootDataType;
+    }
     
     getNodeAllocType(): AllocType {
         return AllocType.ContentNode;
     }
     
     getNodeDataType(): DataType<ContentNode<T>> {
-        return contentNodeType;
+        return this.nodeDataType;
+    }
+    
+    getRootDataType(): DataType<ContentRoot<T>> {
+        return this.rootDataType;
     }
     
     getBranches(

@@ -1,6 +1,6 @@
 
 import { ContentItem, NodeChildKey } from "../src/internalTypes.js";
-import { ContentRoot, contentRootType, ContentNode, contentNodeType } from "../src/builtTypes.js";
+import { AsciiStringRoot, asciiStringRootType, AsciiStringNode, asciiStringNodeType } from "../src/builtTypes.js";
 import { defaultContentSize, AllocType, TreeDirection } from "../src/constants.js";
 import { MemoryStorage } from "../src/storage.js";
 import { StoragePointer, createNullPointer } from "../src/storagePointer.js";
@@ -14,7 +14,7 @@ interface TestContent {
     values: number[];
 }
 
-const nullNodePointer = createNullPointer(contentNodeType);
+const nullNodePointer = createNullPointer(asciiStringNodeType);
 
 const createArray = (length: number, fillValue: number): number[] => (
     (new Array(length).fill(fillValue))
@@ -24,8 +24,8 @@ class TreeTester extends StorageAccessor {
     allocator: HeapAllocator;
     manager: ContentTreeManager<number>;
     nodeAccessor: ContentNodeAccessor<number>;
-    nodes: StoragePointer<ContentNode<number>>[];
-    root: StoragePointer<ContentRoot<number>>;
+    nodes: StoragePointer<AsciiStringNode>[];
+    root: StoragePointer<AsciiStringRoot>;
     
     async init(): Promise<void> {
         this.setStorage(new MemoryStorage());
@@ -33,9 +33,9 @@ class TreeTester extends StorageAccessor {
         await this.allocator.createEmptyHeap();
         this.root = await this.allocator.createSuperAlloc(
             AllocType.AsciiStringRoot,
-            contentRootType,
+            asciiStringRootType,
         );
-        this.manager = new ContentTreeManager(this.allocator, this.root);
+        this.manager = new ContentTreeManager(this.allocator, asciiStringNodeType, this.root);
         this.nodeAccessor = this.manager.nodeAccessor;
         this.nodes = [];
     }
