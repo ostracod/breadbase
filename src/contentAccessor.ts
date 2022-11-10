@@ -1,33 +1,17 @@
 
 import { defaultContentSize, TreeDirection } from "./constants.js";
-import { DataType, TailStructType } from "./dataType.js";
-import { allocType, TreeContent, treeContentType, bufferContentType, asciiStringContentType, utf16StringContentType, listContentType, dictContentType } from "./builtTypes.js";
-import { AllocType } from "./constants.js";
+import { allocType, TreeContent, treeContentType } from "./builtTypes.js";
 import { StoragePointer } from "./storagePointer.js";
 import { StorageAccessor } from "./storageAccessor.js";
 import { HeapAllocator } from "./heapAllocator.js";
 import { ContentTreeManager } from "./contentTreeManager.js";
 import { ContentNodeAccessor } from "./nodeAccessor.js";
 
-const contentTypePairs: [AllocType, DataType<TreeContent>][] = [
-    [AllocType.BufferContent, bufferContentType],
-    [AllocType.AsciiStringContent, asciiStringContentType],
-    [AllocType.Utf16StringContent, utf16StringContentType],
-    [AllocType.ListContent, listContentType],
-    [AllocType.DictContent, dictContentType],
-];
-export const contentTypeMap: Map<AllocType, TailStructType<TreeContent>> = new Map(
-    (contentTypePairs).map((pair) => [
-        pair[0], pair[1].dereference() as TailStructType<TreeContent>,
-    ]),
-);
-
 export class ContentAccessor<T = any> extends StorageAccessor {
     heapAllocator: HeapAllocator;
     manager: ContentTreeManager<T>;
     nodeAccessor: ContentNodeAccessor<T>;
     content: StoragePointer<TreeContent<T>>;
-    tailStructType: TailStructType<TreeContent<T>>;
     fieldValues: Partial<TreeContent<T>>;
     items: T[];
     
@@ -42,9 +26,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         this.content = content;
         this.fieldValues = {};
         this.items = [];
-        const typeNumber = await this.getField("type");
-        this.tailStructType = contentTypeMap.get(typeNumber) as TailStructType<TreeContent<T>>;
-        this.content = this.content.convert(this.tailStructType);
+        this.content = content;
     }
     
     async getField<T2 extends string & (keyof TreeContent)>(
@@ -67,7 +49,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
     }
     
     getElementSize(): number {
-        return this.tailStructType.getElementType().getSize();
+        return this.manager.contentTailStructType.getElementType().getSize();
     }
     
     async getBufferLength(): Promise<number> {
@@ -169,12 +151,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         } else {
             values = inputValues;
         }
-        const content = await this.manager.createContent(
-            parent,
-            await this.getField("type"),
-            length,
-            values,
-        );
+        const content = await this.manager.createContent(parent, length, values);
         await this.writeStructField(parent, "treeContent", content);
         await this.heapAllocator.deleteAlloc(this.content);
         this.content = content;
@@ -183,7 +160,6 @@ export class ContentAccessor<T = any> extends StorageAccessor {
     
     async shatter(inputValues?: T[]): Promise<void> {
         const parent = await this.getField("parent");
-        const typeNumber = await this.getField("type");
         let values: T[] = [];
         if (typeof inputValues === "undefined") {
             values = await this.getAllItems();
@@ -194,11 +170,7 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         for (let startIndex = 0; startIndex < values.length; startIndex += defaultLength) {
             const endIndex = Math.min(startIndex + defaultLength, values.length);
             const subValues = values.slice(startIndex, endIndex);
-            const node = await this.manager.createNode(
-                typeNumber,
-                defaultLength,
-                subValues,
-            );
+            const node = await this.manager.createNode(defaultLength, subValues);
             await this.nodeAccessor.insertNode(node, parent, TreeDirection.Forward);
         }
         await this.manager.deleteNode(parent);
@@ -230,7 +202,6 @@ export class ContentAccessor<T = any> extends StorageAccessor {
             nextNodeItems = valuesToAppend;
         }
         const node = await this.manager.createNode(
-            await this.getField("type"),
             Math.max(nextNodeItems.length, this.getDefaultBufferLength()),
             nextNodeItems,
         );

@@ -1,4 +1,7 @@
 
+import { ContentRoot, ContentNode, TreeContent } from "./builtTypes.js";
+import { DataType } from "./dataType.js";
+import { AllocType } from "./constants.js";
 import { ContentAccessor } from "./contentAccessor.js";
 
 export interface Struct {
@@ -18,5 +21,13 @@ export interface ContentItem<T = any> {
 }
 
 export type NodeChildKey = "leftChild" | "rightChild";
+
+export interface ContentTreeTypes<T> {
+    rootDataType: DataType<ContentRoot<T>>;
+    rootAllocType: AllocType;
+    nodeDataType: DataType<ContentNode<T>>;
+    contentDataType: DataType<TreeContent<T>>;
+    contentAllocType: AllocType;
+}
 
 

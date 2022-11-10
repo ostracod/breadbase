@@ -153,7 +153,7 @@
     } },
     { "name": "ContentListRoot", "type": {
         "name": "ListRoot",
-        "paramTypes": ["ListContentNode"]
+        "paramTypes": ["ContentListNode"]
     } },
     { "name": "IndexedListRoot", "type": {
         "name": "ListRoot",
@@ -265,7 +265,7 @@
             }
         ]
     } },
-    { "name": "ListContentNode", "type": {
+    { "name": "ContentListNode", "type": {
         "name": "ContentNode",
         "paramTypes": ["ValueSlot"]
     } },

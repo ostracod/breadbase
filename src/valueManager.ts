@@ -1,7 +1,9 @@
 
 import { Value } from "./types.js";
-import { ValueSlot, TreeRoot, treeRootType, ContentRoot, BufferRoot, bufferRootType, AsciiStringRoot, asciiStringRootType, DictRoot, dictRootType, ListRoot, listRootType, ContentListRoot, contentListRootType, indexRootType, ContentNode, bufferNodeType, asciiStringNodeType, dictNodeType, listContentNodeType, DictEntry, dictEntryType } from "./builtTypes.js";
-import { DataType, StoragePointerType } from "./dataType.js";
+import { ContentTreeTypes } from "./internalTypes.js";
+import { ValueSlot, TreeRoot, treeRootType, ContentRoot, BufferRoot, bufferRootType, AsciiStringRoot, asciiStringRootType, DictRoot, dictRootType, ListRoot, listRootType, ContentListRoot, contentListRootType, indexRootType, DictEntry, dictEntryType } from "./builtTypes.js";
+import { StoragePointerType } from "./dataType.js";
+import { bufferTreeTypes, asciiStringTreeTypes, dictTreeTypes, contentListTreeTypes } from "./contentTreeTypes.js";
 import { AllocType, ValueSlotType } from "./constants.js";
 import { StoragePointer, createNullPointer, getTailPointer } from "./storagePointer.js";
 import { StorageAccessor } from "./storageAccessor.js";
@@ -19,47 +21,41 @@ export class ValueManager extends StorageAccessor {
     
     async allocateContentRootHelper<T>(
         root: StoragePointer<ContentRoot<T>>,
-        contentAllocType: AllocType,
-        nodeDataType: DataType<ContentNode<T>>,
+        contentTreeTypes: ContentTreeTypes<T>,
         values: T[],
     ): Promise<void> {
-        const manager = new ContentTreeManager<T>(this.heapAllocator, nodeDataType, root);
-        const node = await manager.createNode(contentAllocType, values.length, values);
+        const manager = new ContentTreeManager<T>(
+            this.heapAllocator,
+            contentTreeTypes,
+            root,
+        );
+        const node = await manager.createNode(
+            values.length,
+            values,
+        );
         await manager.setRootChild(node);
     }
     
     async allocateContentRoot<T>(
-        rootAllocType: AllocType,
-        rootDataType: DataType<ContentRoot<T>>,
-        contentAllocType: AllocType,
-        nodeDataType: DataType<ContentNode<T>>,
+        contentTreeTypes: ContentTreeTypes<T>,
         values: T[],
     ): Promise<StoragePointer<ContentRoot<T>>> {
         const root = await this.heapAllocator.createSuperAlloc(
-            rootAllocType,
-            rootDataType,
+            contentTreeTypes.rootAllocType,
+            contentTreeTypes.rootDataType,
         );
-        await this.allocateContentRootHelper(root, contentAllocType, nodeDataType, values);
+        await this.allocateContentRootHelper(root, contentTreeTypes, values);
         return root;
     }
     
     async allocateBuffer(buffer: Buffer): Promise<StoragePointer<BufferRoot>> {
-        return await this.allocateContentRoot(
-            AllocType.BufferRoot,
-            bufferRootType,
-            AllocType.BufferContent,
-            bufferNodeType,
-            Array.from(buffer),
-        );
+        return await this.allocateContentRoot(bufferTreeTypes, Array.from(buffer));
     }
     
     async allocateString(text: string): Promise<StoragePointer<AsciiStringRoot>> {
         // TODO: Support UTF-16 strings.
         return await this.allocateContentRoot(
-            AllocType.AsciiStringRoot,
-            asciiStringRootType,
-            AllocType.AsciiStringContent,
-            asciiStringNodeType,
+            asciiStringTreeTypes,
             Array.from(Buffer.from(text, "ascii")),
         );
     }
@@ -80,8 +76,7 @@ export class ValueManager extends StorageAccessor {
         );
         await this.allocateContentRootHelper(
             root,
-            AllocType.ListContent,
-            listContentNodeType,
+            contentListTreeTypes,
             values,
         );
         return root;
@@ -102,13 +97,7 @@ export class ValueManager extends StorageAccessor {
             await this.write(tailPointer, Array.from(Buffer.from(key)));
             entries.push(entry);
         }
-        return await this.allocateContentRoot(
-            AllocType.DictRoot,
-            dictRootType,
-            AllocType.DictContent,
-            dictNodeType,
-            entries,
-        );
+        return await this.allocateContentRoot(dictTreeTypes, entries);
     }
     
     async allocateValue(value: Value): Promise<ValueSlot> {
