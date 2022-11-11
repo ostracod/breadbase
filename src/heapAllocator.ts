@@ -261,6 +261,14 @@ export class HeapAllocator extends StorageAccessor {
             tailStructType.getSizeWithTail(tailLength) - allocType.getSize(),
         )).convert(tailStructType);
     }
+    
+    async getSuperTailLength<T extends Alloc & TailStruct>(
+        tailStructAlloc: StoragePointer<T>,
+    ): Promise<number> {
+        const allocSize = await this.readStructField(tailStructAlloc, "allocSize");
+        const tailStructType = tailStructAlloc.type.dereference() as TailStructType<T>;
+        return tailStructType.getTailLength(allocType.getSize() + allocSize);
+    }
 }
 
 

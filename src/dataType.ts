@@ -355,8 +355,12 @@ export class TailStructType<T extends TailStruct = TailStruct> extends StructTyp
         return offset + this.getSize();
     }
     
+    getTailLength(sizeWithTail: number): number {
+        return (sizeWithTail - this.getSize()) / this.getElementType().getSize();
+    }
+    
     getSizeWithTail(length: number): number {
-        return super.getSize() + this.getElementType().getSize() * length;
+        return this.getSize() + this.getElementType().getSize() * length;
     }
     
     // Note that this method does not (and cannot) read the struct tail.

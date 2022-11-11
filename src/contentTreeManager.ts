@@ -90,6 +90,52 @@ export class ContentTreeManager<T> extends StorageAccessor {
         }
     }
     
+    async iterateNodesHelper(
+        node: StoragePointer<ContentNode<T>>,
+        direction: TreeDirection,
+        handle: (node: StoragePointer<ContentNode<T>>) => Promise<boolean>,
+    ): Promise<boolean> {
+        const previousChild = await this.nodeAccessor.readBranchesField(
+            node,
+            allocUtils.getOppositeChildKey(direction),
+        );
+        if (!previousChild.isNull()) {
+            const result = await this.iterateNodesHelper(previousChild, direction, handle);
+            if (result) {
+                return true;
+            }
+        }
+        const result = await handle(node);
+        if (result) {
+            return true;
+        }
+        const nextChild = await this.nodeAccessor.readBranchesField(
+            node,
+            allocUtils.getChildKey(direction),
+        );
+        if (nextChild.isNull()) {
+            return false;
+        } else {
+            return await this.iterateNodesHelper(nextChild, direction, handle);
+        }
+    }
+    
+    async iterateNodesForward(
+        // When return value is true, iteration will stop early.
+        handle: (node: StoragePointer<ContentNode<T>>) => Promise<boolean>,
+    ): Promise<void> {
+        const node = await this.getRootChild();
+        await this.iterateNodesHelper(node, TreeDirection.Forward, handle);
+    }
+    
+    async iterateNodesBackward(
+        // When return value is true, iteration will stop early.
+        handle: (node: StoragePointer<ContentNode<T>>) => Promise<boolean>,
+    ): Promise<void> {
+        const node = await this.getRootChild();
+        await this.iterateNodesHelper(node, TreeDirection.Backward, handle);
+    }
+    
     async iterateContent(
         node: StoragePointer<ContentNode<T>>,
         direction: TreeDirection,
@@ -116,50 +162,28 @@ export class ContentTreeManager<T> extends StorageAccessor {
         return false;
     }
     
-    async iterateTreeHelper(
-        node: StoragePointer<ContentNode<T>>,
+    async iterateItemsHelper(
         direction: TreeDirection,
         handle: (value: T) => Promise<boolean>,
-    ): Promise<boolean> {
-        const previousChild = await this.nodeAccessor.readBranchesField(
-            node,
-            allocUtils.getOppositeChildKey(direction),
-        );
-        if (!previousChild.isNull()) {
-            const result = await this.iterateTreeHelper(previousChild, direction, handle);
-            if (result) {
-                return true;
-            }
-        }
-        const result = await this.iterateContent(node, direction, handle);
-        if (result) {
-            return true;
-        }
-        const nextChild = await this.nodeAccessor.readBranchesField(
-            node,
-            allocUtils.getChildKey(direction),
-        );
-        if (nextChild.isNull()) {
-            return false;
-        } else {
-            return await this.iterateTreeHelper(nextChild, direction, handle);
-        }
+    ): Promise<void> {
+        const node = await this.getRootChild();
+        await this.iterateNodesHelper(node, direction, async (inputNode) => (
+            await this.iterateContent(inputNode, direction, handle)
+        ));
     }
     
-    async iterateTreeForward(
+    async iterateItemsForward(
         // When return value is true, iteration will stop early.
         handle: (value: T) => Promise<boolean>,
     ): Promise<void> {
-        const node = await this.getRootChild();
-        await this.iterateTreeHelper(node, TreeDirection.Forward, handle);
+        await this.iterateItemsHelper(TreeDirection.Forward, handle);
     }
     
-    async iterateTreeBackward(
+    async iterateItemsBackward(
         // When return value is true, iteration will stop early.
         handle: (value: T) => Promise<boolean>,
     ): Promise<void> {
-        const node = await this.getRootChild();
-        await this.iterateTreeHelper(node, TreeDirection.Backward, handle);
+        await this.iterateItemsHelper(TreeDirection.Backward, handle);
     }
     
     // Returns the first item for which `compare` returns 0 or 1.
