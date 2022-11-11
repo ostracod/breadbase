@@ -2,7 +2,7 @@
 import { ContentItem } from "./internalTypes.js";
 import { AllocType, TreeDirection } from "./constants.js";
 import * as allocUtils from "./allocUtils.js";
-import { TailStructType } from "./dataType.js";
+import { TailStructType, getTailStructType } from "./dataType.js";
 import { ContentRoot, ContentNode, TreeContent } from "./builtTypes.js";
 import { ContentTreeTypes } from "./internalTypes.js";
 import { StoragePointer, createNullPointer } from "./storagePointer.js";
@@ -27,7 +27,7 @@ export class ContentTreeManager<T> extends StorageAccessor {
         this.heapAllocator = heapAllocator;
         this.setStorage(this.heapAllocator.storage);
         this.treeTypes = treeTypes;
-        this.contentTailStructType = this.treeTypes.contentDataType.dereference() as TailStructType<TreeContent<T>>;
+        this.contentTailStructType = getTailStructType(this.treeTypes.contentDataType);
         this.root = root;
         this.nodeAccessor = new ContentNodeAccessor<T>(
             this.storage,

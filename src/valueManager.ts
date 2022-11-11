@@ -1,8 +1,8 @@
 
 import { Value } from "./types.js";
 import { ContentTreeTypes } from "./internalTypes.js";
-import { ValueSlot, TreeRoot, treeRootType, ContentRoot, BufferRoot, bufferRootType, AsciiStringRoot, asciiStringRootType, DictRoot, dictRootType, ListRoot, listRootType, ContentListRoot, contentListRootType, indexRootType, DictEntry, dictEntryType, AsciiDictEntry, asciiDictEntryType } from "./builtTypes.js";
-import { StoragePointerType, TailStructType } from "./dataType.js";
+import { ValueSlot, TreeRoot, treeRootType, ContentRoot, BufferRoot, bufferRootType, AsciiStringRoot, asciiStringRootType, DictRoot, dictRootType, ListRoot, listRootType, ContentListRoot, contentListRootType, indexRootType, DictEntry, asciiDictEntryType } from "./builtTypes.js";
+import { StoragePointerType, getTailStructType } from "./dataType.js";
 import { bufferTreeTypes, asciiStringTreeTypes, dictTreeTypes, contentListTreeTypes } from "./contentTreeTypes.js";
 import { AllocType, ValueSlotType } from "./constants.js";
 import { StoragePointer, createNullPointer, getTailPointer } from "./storagePointer.js";
@@ -89,7 +89,7 @@ export class ValueManager extends StorageAccessor {
             // TODO: Support UTF-16 keys.
             const entry = await this.heapAllocator.createSuperTailAlloc(
                 AllocType.AsciiDictEntry,
-                asciiDictEntryType.dereference() as TailStructType<AsciiDictEntry>,
+                getTailStructType(asciiDictEntryType),
                 key.length,
             );
             await this.writeStructField(entry, "value", valueSlot);

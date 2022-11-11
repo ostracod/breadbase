@@ -424,4 +424,8 @@ export const addTypeDeclaration = <T extends DataType>(
     return type;
 };
 
+export const getTailStructType = <T extends TailStruct>(
+    dataType: DataType<T>,
+): TailStructType<T> => dataType.dereference() as TailStructType<T>;
+
 

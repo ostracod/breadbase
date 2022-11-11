@@ -1,6 +1,6 @@
 
 import { Struct, TailStruct } from "./internalTypes.js";
-import { TailStructType } from "./dataType.js";
+import { getTailStructType } from "./dataType.js";
 import { StoragePointer, getStructFieldPointer, getTailElementPointer } from "./storagePointer.js";
 import { Storage } from "./storage.js";
 
@@ -20,7 +20,7 @@ export class StorageAccessor {
         pointer: StoragePointer<T>,
         length: number,
     ): Promise<T> {
-        const tailStructType = pointer.type.dereference() as TailStructType<T>;
+        const tailStructType = getTailStructType(pointer.type);
         const size = tailStructType.getSizeWithTail(length);
         const data = await this.storage.read(pointer.index, size);
         return tailStructType.readWithTail(data, 0, length);

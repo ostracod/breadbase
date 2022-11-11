@@ -1,7 +1,7 @@
 
 import { Struct, TailStruct } from "./internalTypes.js";
 import { TreeBranches, ContentNode } from "./builtTypes.js";
-import { DataType, StoragePointerType, ArrayType, StructType, TailStructType } from "./dataType.js";
+import { DataType, StoragePointerType, ArrayType, StructType, getTailStructType } from "./dataType.js";
 
 export class StoragePointer<T> {
     index: number;
@@ -51,7 +51,7 @@ export const getStructFieldPointer = <T1 extends Struct, T2 extends string & (ke
 export const getTailPointerHelper = <T>(
     pointer: StoragePointer<TailStruct<T>>,
 ): { tailIndex: number, elementType: DataType<T> } => {
-    const tailStructType = pointer.type.dereference() as TailStructType<TailStruct<T>>;
+    const tailStructType = getTailStructType(pointer.type);
     const tailIndex = tailStructType.getTailOffset(pointer.index);
     const elementType = tailStructType.getElementType();
     return { tailIndex, elementType };

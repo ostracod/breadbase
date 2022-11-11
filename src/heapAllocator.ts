@@ -1,6 +1,6 @@
 
 import { TailStruct } from "./internalTypes.js";
-import { DataType, TailStructType } from "./dataType.js";
+import { DataType, TailStructType, getTailStructType } from "./dataType.js";
 import { spanDegreeAmount, AllocType } from "./constants.js";
 import * as allocUtils from "./allocUtils.js";
 import { StoragePointer, createNullPointer, getArrayElementPointer, getStructFieldPointer } from "./storagePointer.js";
@@ -266,7 +266,7 @@ export class HeapAllocator extends StorageAccessor {
         tailStructAlloc: StoragePointer<T>,
     ): Promise<number> {
         const allocSize = await this.readStructField(tailStructAlloc, "allocSize");
-        const tailStructType = tailStructAlloc.type.dereference() as TailStructType<T>;
+        const tailStructType = getTailStructType(tailStructAlloc.type);
         return tailStructType.getTailLength(allocType.getSize() + allocSize);
     }
 }
