@@ -365,6 +365,32 @@ export class ContentTreeManager<T> extends StorageAccessor {
             node = previousNode;
         }
     }
+    
+    async deleteTreeHelper(
+        node: StoragePointer<ContentNode<T>>,
+        cleanUpItems: ((items: T[]) => Promise<void> | null) = null,
+    ): Promise<void> {
+        const leftChild = await this.nodeAccessor.readBranchesField(node, "leftChild");
+        await this.deleteTreeHelper(leftChild, cleanUpItems);
+        const rightChild = await this.nodeAccessor.readBranchesField(node, "rightChild");
+        await this.deleteTreeHelper(rightChild, cleanUpItems);
+        const content = await this.readStructField(node, "treeContent");
+        if (cleanUpItems !== null) {
+            const accessor = await this.createContentAccessor(content);
+            const items = await accessor.getAllItems();
+            await cleanUpItems(items);
+        }
+        await this.heapAllocator.deleteAlloc(content);
+        await this.heapAllocator.deleteAlloc(node);
+    }
+    
+    async deleteTree(
+        cleanUpItems: ((items: T[]) => Promise<void> | null) = null,
+    ): Promise<void> {
+        const node = await this.getRootChild();
+        await this.deleteTreeHelper(node, cleanUpItems);
+        await this.heapAllocator.deleteAlloc(this.root);
+    }
 }
 
 

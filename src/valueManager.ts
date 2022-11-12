@@ -19,16 +19,19 @@ export class ValueManager extends StorageAccessor {
         this.setStorage(this.heapAllocator.storage);
     }
     
+    createContentTreeManager<T>(
+        root: StoragePointer<ContentRoot<T>>,
+        contentTreeTypes: ContentTreeTypes<T>,
+    ): ContentTreeManager<T> {
+        return new ContentTreeManager<T>(this.heapAllocator, contentTreeTypes, root);
+    }
+    
     async allocateContentRootHelper<T>(
         root: StoragePointer<ContentRoot<T>>,
         contentTreeTypes: ContentTreeTypes<T>,
         values: T[],
     ): Promise<void> {
-        const manager = new ContentTreeManager<T>(
-            this.heapAllocator,
-            contentTreeTypes,
-            root,
-        );
+        const manager = this.createContentTreeManager(root, contentTreeTypes);
         const node = await manager.createNode(
             values.length,
             values,
@@ -138,7 +141,7 @@ export class ValueManager extends StorageAccessor {
         contentTreeTypes: ContentTreeTypes<T>,
         handle: (values: T[]) => Promise<void>,
     ): Promise<void> {
-        const manager = new ContentTreeManager(this.heapAllocator, contentTreeTypes, root);
+        const manager = this.createContentTreeManager(root, contentTreeTypes);
         await manager.iterateNodesForward(async (node) => {
             const accessor = await manager.createContentAccessorByNode(node);
             await handle(await accessor.getAllItems());
@@ -221,6 +224,66 @@ export class ValueManager extends StorageAccessor {
             }
         } else {
             throw new Error(`Invalid value slot type. (${valueSlotType})`);
+        }
+    }
+    
+    async cleanUpContent<T>(
+        root: StoragePointer<ContentRoot<T>>,
+        contentTreeTypes: ContentTreeTypes<T>,
+        cleanUpItems: ((items: T[]) => Promise<void> | null) = null,
+    ): Promise<void> {
+        const manager = this.createContentTreeManager(root, contentTreeTypes);
+        await manager.deleteTree(cleanUpItems);
+    }
+    
+    async cleanUpList(root: StoragePointer<ListRoot>): Promise<void> {
+        const indexRoot = await this.readStructField(root, "firstIndex");
+        if (!indexRoot.isNull()) {
+            throw new Error("Cleaning up indexed lists is not yet implemented.");
+        }
+        const contentRoot = root.convert(contentListRootType);
+        await this.cleanUpContent(contentRoot, contentListTreeTypes, async (valueSlots) => {
+            for (const valueSlot of valueSlots) {
+                await this.cleanUpValue(valueSlot);
+            }
+        });
+    }
+    
+    async cleanUpDict(root: StoragePointer<DictRoot>): Promise<void> {
+        await this.cleanUpContent(root, dictTreeTypes, async (entries) => {
+            for (const entry of entries) {
+                const valueSlot = await this.readStructField(entry, "value");
+                await this.cleanUpValue(valueSlot);
+                await this.heapAllocator.deleteAlloc(entry);
+            }
+        });
+    }
+    
+    async cleanUpValue(valueSlot: ValueSlot): Promise<void> {
+        const { type: valueSlotType, data } = valueSlot;
+        if (valueSlotType !== ValueSlotType.TreeRoot) {
+            // No clean-up is necessary for boolean, number, or null.
+            return;
+        }
+        const pointerType = (new StoragePointerType<TreeRoot>()).init(treeRootType);
+        const root = pointerType.read(data, 0);
+        const rootAllocType = await this.readStructField(root, "type");
+        if (rootAllocType === AllocType.BufferRoot) {
+            return await this.cleanUpContent(
+                root.convert(bufferRootType),
+                bufferTreeTypes,
+            );
+        } else if (rootAllocType === AllocType.AsciiStringRoot) {
+            return await this.cleanUpContent(
+                root.convert(asciiStringRootType),
+                asciiStringTreeTypes,
+            );
+        } else if (rootAllocType === AllocType.ListRoot) {
+            return await this.cleanUpList(root.convert(listRootType));
+        } else if (rootAllocType === AllocType.DictRoot) {
+            return await this.cleanUpDict(root.convert(dictRootType));
+        } else {
+            throw new Error(`Invalid value root type. (${valueSlotType})`);
         }
     }
 }
