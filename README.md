@@ -86,7 +86,7 @@ interface SeqElemsSelector extends Selector {
 }
 ```
 
-Refers to a range of elements in the parent sequence starting at `startIndex` in the given direction. `startIndex` is inclusive, and has a default value of zero. The default value of `direction` is `forward`. `SeqElemsSelector` may behave in one of three ways:
+Refers to a range of elements in the parent sequence starting at `startIndex` in the given direction. `startIndex` is inclusive, and has a default value of zero. The default value of `direction` is `"forward"`. `SeqElemsSelector` may behave in one of three ways:
 
 * If `endIndex` is provided, the selector returns elements between `startIndex` and `endIndex`. `endIndex` is exclusive.
 * If `maxAmount` is provided, the selector returns up to `maxAmount` elements starting at `startIndex`.
