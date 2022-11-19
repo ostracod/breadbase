@@ -146,7 +146,7 @@ Initializes the `BreadBase` instance to read from the database in `directoryPath
 breadBase.load(path: Path): Promise<Value | Value[]>
 ```
 
-Reads child values from the root value at `path`. The output type will be `Value[]` if any selector in `path` is `SeqElemsSelector`, and will be `Value` otherwise.
+Reads child values from the root value at `path`. The output type will be `Value` or `Value[]` depending on how `SeqElemsSelector` is used in `path`.
 
 ```
 breadBase.set(path: Path, value: Value): Promise<void>

@@ -1,5 +1,5 @@
 
-import { ContentItem } from "./internalTypes.js";
+import { ContentItem, ContentSearchResult } from "./internalTypes.js";
 import { AllocType, TreeDirection } from "./constants.js";
 import * as allocUtils from "./allocUtils.js";
 import { TailStructType, getTailStructType } from "./dataType.js";
@@ -192,7 +192,7 @@ export class ContentTreeManager<T> extends StorageAccessor {
         // `compare` returns 0 if `value` has match, 1 if `value`
         // is too late, and -1 if `value` is too early.
         compare: (value: T) => Promise<number>,
-    ): Promise<ContentItem<T>> {
+    ): Promise<ContentSearchResult<T>> {
         let node = await this.getRootChild();
         let startNode: StoragePointer<ContentNode<T>> = null;
         while (!node.isNull()) {
@@ -212,13 +212,22 @@ export class ContentTreeManager<T> extends StorageAccessor {
             // TODO: Use binary search.
             for (let index = 0; index < itemCount; index++) {
                 const value = await contentAccessor.getItem(index);
-                if (await compare(value) >= 0) {
-                    return { accessor: contentAccessor, index };
+                const comparisonResult = await compare(value);
+                if (comparisonResult >= 0) {
+                    return {
+                        item: { accessor: contentAccessor, index },
+                        isEqual: (comparisonResult === 0),
+                    };
                 }
             }
             node = await this.nodeAccessor.getNextNode(node);
+            if (node === null) {
+                return {
+                    item: { accessor: contentAccessor, index: itemCount },
+                    isEqual: false,
+                };
+            }
         }
-        return null;
     }
     
     async createContent(
@@ -299,6 +308,11 @@ export class ContentTreeManager<T> extends StorageAccessor {
         }
     }
     
+    // `value` will be inserted before `nextItem`.
+    async insertItem(value: T, nextItem: ContentItem<T>): Promise<void> {
+        await this.insertItems([value], nextItem);
+    }
+    
     // `startIndex` is inclusive, and `endIndex` is exclusive.
     async deleteItemsHelper(
         accessor: ContentAccessor,
@@ -364,6 +378,11 @@ export class ContentTreeManager<T> extends StorageAccessor {
             }
             node = previousNode;
         }
+    }
+    
+    async deleteItem(item: ContentItem<T>): Promise<void> {
+        const nextItem = { accessor: item.accessor, index: item.index + 1 };
+        await this.deleteItems(item, nextItem);
     }
     
     async deleteTreeHelper(

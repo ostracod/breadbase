@@ -52,6 +52,8 @@ export class BreadBase extends StorageAccessor {
     
     async createEmptyDb(): Promise<void> {
         await this.heapAllocator.createEmptyHeap();
+        const valueSlot = await this.valueManager.allocateValue(null);
+        await this.valueManager.setRootValue(valueSlot, false);
         await this.storage.markVersion();
     }
     

@@ -6,7 +6,7 @@ import { StoragePointerType, getTailStructType } from "./dataType.js";
 import { bufferTreeTypes, asciiStringTreeTypes, dictTreeTypes, contentListTreeTypes } from "./contentTreeTypes.js";
 import { AllocType, ValueSlotType } from "./constants.js";
 import { StoragePointer, createNullPointer, getTailPointer } from "./storagePointer.js";
-import { StorageAccessor } from "./storageAccessor.js";
+import { StorageAccessor, storageHeaderPointer } from "./storageAccessor.js";
 import { HeapAllocator } from "./heapAllocator.js";
 import { ContentTreeManager } from "./contentTreeManager.js";
 
@@ -85,19 +85,27 @@ export class ValueManager extends StorageAccessor {
         return root;
     }
     
+    async allocateDictEntry(
+        key: string,
+        valueSlot: ValueSlot,
+    ): Promise<StoragePointer<DictEntry>> {
+        // TODO: Support UTF-16 keys.
+        const output = await this.heapAllocator.createSuperTailAlloc(
+            AllocType.AsciiDictEntry,
+            getTailStructType(asciiDictEntryType),
+            key.length,
+        );
+        await this.writeStructField(output, "value", valueSlot);
+        const tailPointer = getTailPointer(output, key.length);
+        await this.write(tailPointer, Array.from(Buffer.from(key)));
+        return output;
+    }
+    
     async allocateDict(dict: { [key: string]: Value }): Promise<StoragePointer<DictRoot>> {
         const entries: StoragePointer<DictEntry>[] = [];
         for (const key in dict) {
             const valueSlot = await this.allocateValue(dict[key]);
-            // TODO: Support UTF-16 keys.
-            const entry = await this.heapAllocator.createSuperTailAlloc(
-                AllocType.AsciiDictEntry,
-                getTailStructType(asciiDictEntryType),
-                key.length,
-            );
-            await this.writeStructField(entry, "value", valueSlot);
-            const tailPointer = getTailPointer(entry, key.length);
-            await this.write(tailPointer, Array.from(Buffer.from(key)));
+            const entry = await this.allocateDictEntry(key, valueSlot);
             entries.push(entry);
         }
         return await this.allocateContentRoot(dictTreeTypes, entries);
@@ -180,18 +188,22 @@ export class ValueManager extends StorageAccessor {
         return output;
     }
     
+    async readDictEntryKey(entry: StoragePointer<DictEntry>) {
+        // TODO: Support UTF-16 keys.
+        const asciiEntry = entry.convert(asciiDictEntryType);
+        const tailLength = await this.heapAllocator.getSuperTailLength(asciiEntry);
+        const tailPointer = getTailPointer(asciiEntry, tailLength);
+        return Buffer.from(await this.read(tailPointer)).toString("ascii");
+    }
+    
     async readDict(
         root: StoragePointer<DictRoot>,
     ): Promise<{ [key: string]: Value }> {
         const output: { [key: string]: Value } = {};
         await this.readContent(root, dictTreeTypes, async (entries) => {
             for (const entry of entries) {
-                // TODO: Support UTF-16 keys.
-                const asciiEntry = entry.convert(asciiDictEntryType);
-                const tailLength = await this.heapAllocator.getSuperTailLength(asciiEntry);
-                const tailPointer = getTailPointer(asciiEntry, tailLength);
-                const key = Buffer.from(await this.read(tailPointer)).toString("ascii");
-                const valueSlot = await this.readStructField(asciiEntry, "value");
+                const key = await this.readDictEntryKey(entry);
+                const valueSlot = await this.readStructField(entry, "value");
                 const value = await this.readValue(valueSlot);
                 output[key] = value;
             }
@@ -249,12 +261,16 @@ export class ValueManager extends StorageAccessor {
         });
     }
     
+    async cleanUpDictEntry(entry: StoragePointer<DictEntry>): Promise<void> {
+        const valueSlot = await this.readStructField(entry, "value");
+        await this.cleanUpValue(valueSlot);
+        await this.heapAllocator.deleteAlloc(entry);
+    }
+    
     async cleanUpDict(root: StoragePointer<DictRoot>): Promise<void> {
         await this.cleanUpContent(root, dictTreeTypes, async (entries) => {
             for (const entry of entries) {
-                const valueSlot = await this.readStructField(entry, "value");
-                await this.cleanUpValue(valueSlot);
-                await this.heapAllocator.deleteAlloc(entry);
+                await this.cleanUpDictEntry(entry);
             }
         });
     }
@@ -285,6 +301,18 @@ export class ValueManager extends StorageAccessor {
         } else {
             throw new Error(`Invalid value root type. (${valueSlotType})`);
         }
+    }
+    
+    async getRootValue(): Promise<ValueSlot> {
+        return await this.readStructField(storageHeaderPointer, "rootValue");
+    }
+    
+    async setRootValue(valueSlot: ValueSlot, shouldCleanUp = true): Promise<void> {
+        if (shouldCleanUp) {
+            const oldValueSlot = await this.getRootValue();
+            await this.cleanUpValue(oldValueSlot);
+        }
+        await this.writeStructField(storageHeaderPointer, "rootValue", valueSlot);
     }
 }
 

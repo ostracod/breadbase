@@ -1,8 +1,11 @@
 
 import { Struct, TailStruct } from "./internalTypes.js";
+import { storageHeaderType } from "./builtTypes.js";
 import { getTailStructType } from "./dataType.js";
 import { StoragePointer, getStructFieldPointer, getTailElementPointer } from "./storagePointer.js";
 import { Storage } from "./storage.js";
+
+export const storageHeaderPointer = new StoragePointer(0, storageHeaderType);
 
 export class StorageAccessor {
     storage: Storage;

@@ -1,5 +1,6 @@
 
 import { defaultContentSize, TreeDirection } from "./constants.js";
+import { ContentItem } from "./internalTypes.js";
 import { allocType, TreeContent, treeContentType } from "./builtTypes.js";
 import { StoragePointer } from "./storagePointer.js";
 import { StorageAccessor } from "./storageAccessor.js";
@@ -243,5 +244,9 @@ export class ContentAccessor<T = any> extends StorageAccessor {
         await this.insertItems(itemCount, valuesToBorrow);
     }
 }
+
+export const readContentItem = async <T>(item: ContentItem<T>): Promise<T> => (
+    await item.accessor.getItem(item.index)
+);
 
 

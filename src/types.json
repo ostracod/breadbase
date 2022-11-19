@@ -13,7 +13,8 @@
             { "name": "finalSpan", "type": {
                 "class": "StoragePointerType",
                 "elementType": "EmptySpan"
-            } }
+            } },
+            { "name": "rootValue", "type": "ValueSlot" }
         ]
     } },
     { "name": "Span", "type": {

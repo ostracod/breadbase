@@ -1,4 +1,5 @@
 
+import { ContentSearchResult } from "./internalTypes.js";
 import { Value, Sort, Filter, DictEntrySelector, SeqElemSelector, SeqElemsSelector } from "./types.js";
 import { ValueSlot, ContentRoot, DictRoot, DictEntry } from "./builtTypes.js";
 import { dictTreeTypes } from "./contentTreeTypes.js";
@@ -6,6 +7,7 @@ import { TreeDirection } from "./constants.js";
 import { getWithDefault } from "./niceUtils.js";
 import { StoragePointer } from "./storagePointer.js";
 import { StorageAccessor } from "./storageAccessor.js";
+import { readContentItem } from "./contentAccessor.js";
 import { ContentTreeManager } from "./contentTreeManager.js";
 import { ValueManager } from "./valueManager.js";
 
@@ -38,11 +40,12 @@ export abstract class SingleSelection extends Selection {
 export class RootSelection extends SingleSelection {
     
     async getValueSlot(): Promise<ValueSlot> {
-        throw new Error("Not yet implemented.");
+        return await this.valueManager.getRootValue();
     }
     
     async set(value: Value): Promise<void> {
-        throw new Error("Not yet implemented.");
+        const valueSlot = await this.valueManager.allocateValue(value);
+        await this.valueManager.setRootValue(valueSlot);
     }
     
     async delete(): Promise<void> {
@@ -64,16 +67,50 @@ export class DictEntrySelection extends SingleSelection {
         this.key = selector.key;
     }
     
+    async findEntry(): Promise<ContentSearchResult<StoragePointer<DictEntry>>> {
+        return await this.treeManager.findItemByComparison(async (entry) => {
+            const key = await this.valueManager.readDictEntryKey(entry);
+            if (key > this.key) {
+                return 1;
+            } else if (key < this.key) {
+                return -1;
+            } else {
+                return 0;
+            }
+        });
+    }
+    
     async getValueSlot(): Promise<ValueSlot> {
-        throw new Error("Not yet implemented.");
+        const { item, isEqual } = await this.findEntry();
+        if (!isEqual) {
+            throw new Error(`Could not find key "${this.key}" in dictionary.`);
+        }
+        const entry = await readContentItem(item);
+        return await this.readStructField(entry, "value");
     }
     
     async set(value: Value): Promise<void> {
-        throw new Error("Not yet implemented.");
+        const valueSlot = await this.valueManager.allocateValue(value);
+        const { item, isEqual } = await this.findEntry();
+        if (isEqual) {
+            const entry = await item.accessor.getItem(item.index);
+            const oldValueSlot = await this.readStructField(entry, "value");
+            await this.valueManager.cleanUpValue(oldValueSlot);
+            await this.writeStructField(entry, "value", valueSlot);
+        } else {
+            const entry = await this.valueManager.allocateDictEntry(this.key, valueSlot);
+            await this.treeManager.insertItem(entry, item);
+        }
     }
     
     async delete(): Promise<void> {
-        throw new Error("Not yet implemented.");
+        const { item, isEqual } = await this.findEntry();
+        if (!isEqual) {
+            return;
+        }
+        const entry = await readContentItem(item);
+        await this.valueManager.cleanUpDictEntry(entry);
+        await this.treeManager.deleteItem(item);
     }
 }
 

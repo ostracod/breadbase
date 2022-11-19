@@ -30,4 +30,9 @@ export interface ContentTreeTypes<T> {
     contentAllocType: AllocType;
 }
 
+export interface ContentSearchResult<T> {
+    item: ContentItem<T>;
+    isEqual: boolean;
+}
+
 

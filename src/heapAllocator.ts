@@ -6,10 +6,9 @@ import * as allocUtils from "./allocUtils.js";
 import { StoragePointer, createNullPointer, getArrayElementPointer, getStructFieldPointer } from "./storagePointer.js";
 import { storageHeaderType, spanType, EmptySpan, emptySpanType, Alloc, allocType } from "./builtTypes.js";
 import { Storage } from "./storage.js";
-import { StorageAccessor } from "./storageAccessor.js";
+import { StorageAccessor, storageHeaderPointer } from "./storageAccessor.js";
 
 const storageHeaderSize = storageHeaderType.getSize();
-const storageHeaderPointer = new StoragePointer(0, storageHeaderType);
 const nullSpanPointer = createNullPointer(spanType);
 const nullEmptySpanPointer = createNullPointer(emptySpanType);
 // Includes both the header and data region.
@@ -31,7 +30,7 @@ export class HeapAllocator extends StorageAccessor {
         }
         this.finalSpan = new StoragePointer(storageHeaderSize, emptySpanType);
         await this.storage.setSize(storageHeaderSize + emptySpanType.getSize());
-        await this.write(
+        await this.writeStructFields(
             storageHeaderPointer,
             {
                 emptySpansByDegree: this.emptySpansByDegree,
@@ -53,11 +52,14 @@ export class HeapAllocator extends StorageAccessor {
     }
     
     async initWithHeap(): Promise<void> {
-        const storageHeader = await this.read(
-            new StoragePointer(0, storageHeaderType),
+        this.emptySpansByDegree = await this.readStructField(
+            storageHeaderPointer,
+            "emptySpansByDegree",
         );
-        this.emptySpansByDegree = storageHeader.emptySpansByDegree;
-        this.finalSpan = storageHeader.finalSpan;
+        this.finalSpan = await this.readStructField(
+            storageHeaderPointer,
+            "finalSpan",
+        );
     }
     
     async setEmptySpanByDegree(
